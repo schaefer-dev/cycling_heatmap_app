@@ -18,7 +18,7 @@ function getHeatmapParams(zoom) {
   }
 }
 
-export default function HeatmapLayer({ points, intensity = 50 }) {
+export default function HeatmapLayer({ points, intensity = 50, opacity = 0.8 }) {
   const map = useMap();
   const [zoom, setZoom] = useState(map.getZoom());
 
@@ -66,28 +66,29 @@ export default function HeatmapLayer({ points, intensity = 50 }) {
 
     heatLayer.addTo(map);
 
-    // Disable pointer events on the heatmap canvas so clicks pass through to tracks
+    // Style the heatmap canvas: disable pointer events and apply opacity
     // The canvas is created lazily, so we need to wait for it
-    const disablePointerEvents = () => {
+    const styleCanvas = () => {
       const canvas = heatLayer._canvas;
       if (canvas) {
         canvas.style.pointerEvents = 'none';
+        canvas.style.opacity = opacity;
       }
     };
 
     // Try immediately and also after a short delay (for lazy initialization)
-    disablePointerEvents();
-    setTimeout(disablePointerEvents, 100);
+    styleCanvas();
+    setTimeout(styleCanvas, 100);
 
-    // Also disable on map events that might recreate the canvas
-    map.on('zoomend moveend', disablePointerEvents);
+    // Also style on map events that might recreate the canvas
+    map.on('zoomend moveend', styleCanvas);
 
     // Cleanup
     return () => {
-      map.off('zoomend moveend', disablePointerEvents);
+      map.off('zoomend moveend', styleCanvas);
       map.removeLayer(heatLayer);
     };
-  }, [map, points, intensity, zoom]);
+  }, [map, points, intensity, opacity, zoom]);
 
   return null;
 }

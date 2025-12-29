@@ -1,5 +1,6 @@
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getRides, getStats, deleteRide } from '../api';
+import { getRides, getStats, deleteRide, updateRide } from '../api';
 
 const BIKE_TYPE_LABELS = {
   road: 'Road',
@@ -23,6 +24,8 @@ export default function Sidebar({
   onShowHeatmapChange,
   heatmapIntensity,
   onHeatmapIntensityChange,
+  heatmapOpacity,
+  onHeatmapOpacityChange,
   showSections,
   onShowSectionsChange,
   showAllTracks,
@@ -59,12 +62,27 @@ export default function Sidebar({
     }
   });
 
+  // Rename ride mutation
+  const renameMutation = useMutation({
+    mutationFn: ({ id, title }) => updateRide(id, { title }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rides'] });
+      queryClient.invalidateQueries({ queryKey: ['allTracks'] });
+    }
+  });
+
   const handleDeleteRide = (rideId, rideTitle) => {
     if (window.confirm(`Delete "${rideTitle}"?\n\nThis will also delete all rated sections for this ride.`)) {
       if (selectedRide === rideId) {
         onSelectRide(null);
       }
       deleteMutation.mutate(rideId);
+    }
+  };
+
+  const handleRenameRide = (rideId, newTitle) => {
+    if (newTitle.trim()) {
+      renameMutation.mutate({ id: rideId, title: newTitle.trim() });
     }
   };
 
@@ -129,18 +147,33 @@ export default function Sidebar({
             </label>
           </div>
           {showHeatmap && (
-            <div className="flex items-center gap-2 ml-5">
-              <span className="text-xs text-gray-500">Intensity:</span>
-              <input
-                type="range"
-                min="10"
-                max="100"
-                step="5"
-                value={heatmapIntensity}
-                onChange={(e) => onHeatmapIntensityChange(parseInt(e.target.value))}
-                className="w-24 h-1.5 accent-blue-500"
-              />
-              <span className="text-xs text-gray-500 w-8">{heatmapIntensity}%</span>
+            <div className="ml-5 space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500 w-14">Intensity:</span>
+                <input
+                  type="range"
+                  min="10"
+                  max="100"
+                  step="5"
+                  value={heatmapIntensity}
+                  onChange={(e) => onHeatmapIntensityChange(parseInt(e.target.value))}
+                  className="w-20 h-1.5 accent-blue-500"
+                />
+                <span className="text-xs text-gray-500 w-8">{heatmapIntensity}%</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-500 w-14">Opacity:</span>
+                <input
+                  type="range"
+                  min="0.1"
+                  max="1"
+                  step="0.05"
+                  value={heatmapOpacity}
+                  onChange={(e) => onHeatmapOpacityChange(parseFloat(e.target.value))}
+                  className="w-20 h-1.5 accent-blue-500"
+                />
+                <span className="text-xs text-gray-500 w-8">{Math.round(heatmapOpacity * 100)}%</span>
+              </div>
             </div>
           )}
           <label className="flex items-center gap-2 text-sm">
@@ -206,6 +239,7 @@ export default function Sidebar({
                 isSelected={selectedRide === ride.id}
                 onClick={() => onSelectRide(selectedRide === ride.id ? null : ride.id)}
                 onDelete={() => handleDeleteRide(ride.id, ride.title)}
+                onRename={(newTitle) => handleRenameRide(ride.id, newTitle)}
               />
             ))}
           </div>
@@ -240,7 +274,10 @@ export default function Sidebar({
   );
 }
 
-function RideCard({ ride, isSelected, onClick, onDelete }) {
+function RideCard({ ride, isSelected, onClick, onDelete, onRename }) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(ride.title);
+
   const formattedDate = ride.date
     ? new Date(ride.date).toLocaleDateString('en-US', {
         month: 'short',
@@ -254,9 +291,37 @@ function RideCard({ ride, isSelected, onClick, onDelete }) {
     onDelete();
   };
 
+  const handleEditClick = (e) => {
+    e.stopPropagation();
+    setEditTitle(ride.title);
+    setIsEditing(true);
+  };
+
+  const handleSaveEdit = (e) => {
+    e?.stopPropagation();
+    if (editTitle.trim() && editTitle.trim() !== ride.title) {
+      onRename(editTitle.trim());
+    }
+    setIsEditing(false);
+  };
+
+  const handleCancelEdit = (e) => {
+    e?.stopPropagation();
+    setEditTitle(ride.title);
+    setIsEditing(false);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      handleSaveEdit();
+    } else if (e.key === 'Escape') {
+      handleCancelEdit();
+    }
+  };
+
   return (
     <div
-      onClick={onClick}
+      onClick={isEditing ? undefined : onClick}
       className={`group p-3 rounded-lg cursor-pointer transition-colors ${
         isSelected
           ? 'bg-blue-50 border border-blue-200'
@@ -265,19 +330,46 @@ function RideCard({ ride, isSelected, onClick, onDelete }) {
     >
       <div className="flex items-start justify-between">
         <div className="flex-1 min-w-0">
-          <div className="font-medium text-gray-800 truncate">{ride.title}</div>
+          {isEditing ? (
+            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+              <input
+                type="text"
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                onKeyDown={handleKeyDown}
+                onBlur={handleSaveEdit}
+                autoFocus
+                className="flex-1 min-w-0 px-1 py-0.5 text-sm border border-blue-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </div>
+          ) : (
+            <div className="font-medium text-gray-800 truncate">{ride.title}</div>
+          )}
           <div className="text-sm text-gray-500">{formattedDate}</div>
         </div>
         <div className="flex items-center gap-1">
-          <button
-            onClick={handleDelete}
-            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 p-1 transition-opacity"
-            title="Delete ride"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
+          {!isEditing && (
+            <>
+              <button
+                onClick={handleEditClick}
+                className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-blue-500 p-1 transition-opacity"
+                title="Rename ride"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
+              <button
+                onClick={handleDelete}
+                className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 p-1 transition-opacity"
+                title="Delete ride"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                </svg>
+              </button>
+            </>
+          )}
           <span
             className={`${BIKE_TYPE_COLORS[ride.bike_type]} text-white text-xs px-2 py-0.5 rounded-full`}
           >

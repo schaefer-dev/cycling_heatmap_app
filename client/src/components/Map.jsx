@@ -131,6 +131,7 @@ export default function Map({
   bikeTypeFilter,
   showHeatmap,
   heatmapIntensity,
+  heatmapOpacity,
   showSections,
   showAllTracks,
   trackOpacity,
@@ -271,7 +272,7 @@ export default function Map({
 
         {/* Heatmap layer */}
         {showHeatmap && heatmapData && heatmapData.length > 0 && (
-          <HeatmapLayer points={heatmapData} intensity={heatmapIntensity} />
+          <HeatmapLayer points={heatmapData} intensity={heatmapIntensity} opacity={heatmapOpacity} />
         )}
 
         {/* All tracks layer */}
