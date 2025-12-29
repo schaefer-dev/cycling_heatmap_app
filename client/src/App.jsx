@@ -18,6 +18,7 @@ function App() {
   const [selectedRide, setSelectedRide] = useState(null);
   const [bikeTypeFilter, setBikeTypeFilter] = useState(null);
   const [showHeatmap, setShowHeatmap] = useState(true);
+  const [heatmapIntensity, setHeatmapIntensity] = useState(50);
   const [showSections, setShowSections] = useState(true);
   const [showAllTracks, setShowAllTracks] = useState(false);
   const [trackOpacity, setTrackOpacity] = useState(0.85);
@@ -35,6 +36,8 @@ function App() {
           onBikeTypeFilterChange={setBikeTypeFilter}
           showHeatmap={showHeatmap}
           onShowHeatmapChange={setShowHeatmap}
+          heatmapIntensity={heatmapIntensity}
+          onHeatmapIntensityChange={setHeatmapIntensity}
           showSections={showSections}
           onShowSectionsChange={setShowSections}
           showAllTracks={showAllTracks}
@@ -51,6 +54,7 @@ function App() {
             selectedRide={selectedRide}
             bikeTypeFilter={bikeTypeFilter}
             showHeatmap={showHeatmap}
+            heatmapIntensity={heatmapIntensity}
             showSections={showSections}
             showAllTracks={showAllTracks}
             trackOpacity={trackOpacity}

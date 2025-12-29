@@ -82,13 +82,15 @@ router.get('/tracks', (req, res) => {
   try {
     const { bike_type } = req.query;
 
-    let ridesQuery = `SELECT id, title, bike_type FROM rides`;
+    let ridesQuery = `SELECT id, title, bike_type, date, distance_km FROM rides`;
     const params = [];
 
     if (bike_type && ['road', 'gravel', 'mtb'].includes(bike_type)) {
       ridesQuery += ' WHERE bike_type = ?';
       params.push(bike_type);
     }
+
+    ridesQuery += ' ORDER BY date DESC';
 
     const rides = db.prepare(ridesQuery).all(...params);
 
@@ -103,6 +105,8 @@ router.get('/tracks', (req, res) => {
       id: ride.id,
       title: ride.title,
       bike_type: ride.bike_type,
+      date: ride.date,
+      distance_km: ride.distance_km,
       track: getPoints.all(ride.id).map(p => [p.lat, p.lng])
     }));
 

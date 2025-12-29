@@ -90,6 +90,50 @@ router.get('/:id', (req, res) => {
   }
 });
 
+// Check if a ride already exists (duplicate detection)
+function checkDuplicate(parsed) {
+  // Check by date and distance (within 0.5km tolerance)
+  if (parsed.date) {
+    const existing = db.prepare(`
+      SELECT id, title, distance_km FROM rides
+      WHERE date = ? AND ABS(distance_km - ?) < 0.5
+    `).get(parsed.date, parsed.totalDistance);
+
+    if (existing) {
+      return existing;
+    }
+  }
+
+  // Also check by first and last track points (within ~50m)
+  if (parsed.points.length > 0) {
+    const first = parsed.points[0];
+    const last = parsed.points[parsed.points.length - 1];
+    const threshold = 0.0005; // ~50m
+
+    const matchingRides = db.prepare(`
+      SELECT DISTINCT r.id, r.title, r.date, r.distance_km
+      FROM rides r
+      JOIN track_points tp_first ON tp_first.ride_id = r.id AND tp_first.point_index = 0
+      JOIN track_points tp_last ON tp_last.ride_id = r.id AND tp_last.point_index = (
+        SELECT MAX(point_index) FROM track_points WHERE ride_id = r.id
+      )
+      WHERE ABS(tp_first.lat - ?) < ? AND ABS(tp_first.lng - ?) < ?
+        AND ABS(tp_last.lat - ?) < ? AND ABS(tp_last.lng - ?) < ?
+        AND ABS(r.distance_km - ?) < 0.5
+    `).get(
+      first.lat, threshold, first.lng, threshold,
+      last.lat, threshold, last.lng, threshold,
+      parsed.totalDistance
+    );
+
+    if (matchingRides) {
+      return matchingRides;
+    }
+  }
+
+  return null;
+}
+
 // POST /api/rides - Import new ride from GPX
 router.post('/', upload.array('gpx', 50), async (req, res) => {
   try {
@@ -106,11 +150,22 @@ router.post('/', upload.array('gpx', 50), async (req, res) => {
 
     const importedRides = [];
     const errors = [];
+    const skipped = [];
 
     for (const file of files) {
       try {
         const gpxContent = file.buffer.toString('utf-8');
         const parsed = parseGPX(gpxContent);
+
+        // Check for duplicates
+        const duplicate = checkDuplicate(parsed);
+        if (duplicate) {
+          skipped.push({
+            file: file.originalname,
+            reason: `Already imported as "${duplicate.title}" (${duplicate.distance_km?.toFixed(1)} km)`
+          });
+          continue;
+        }
 
         const rideId = uuidv4();
 
@@ -180,9 +235,11 @@ router.post('/', upload.array('gpx', 50), async (req, res) => {
     res.json({
       imported: importedRides,
       errors,
+      skipped,
       summary: {
         total: files.length,
         success: importedRides.length,
+        skipped: skipped.length,
         failed: errors.length
       }
     });

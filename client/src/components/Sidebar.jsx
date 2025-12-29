@@ -1,5 +1,5 @@
-import { useQuery } from '@tanstack/react-query';
-import { getRides, getStats } from '../api';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getRides, getStats, deleteRide } from '../api';
 
 const BIKE_TYPE_LABELS = {
   road: 'Road',
@@ -21,6 +21,8 @@ export default function Sidebar({
   onBikeTypeFilterChange,
   showHeatmap,
   onShowHeatmapChange,
+  heatmapIntensity,
+  onHeatmapIntensityChange,
   showSections,
   onShowSectionsChange,
   showAllTracks,
@@ -30,6 +32,8 @@ export default function Sidebar({
   mapSaturation,
   onMapSaturationChange
 }) {
+  const queryClient = useQueryClient();
+
   // Fetch rides
   const { data: rides, isLoading: ridesLoading } = useQuery({
     queryKey: ['rides', bikeTypeFilter],
@@ -41,6 +45,28 @@ export default function Sidebar({
     queryKey: ['stats'],
     queryFn: getStats
   });
+
+  // Delete ride mutation
+  const deleteMutation = useMutation({
+    mutationFn: deleteRide,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rides'] });
+      queryClient.invalidateQueries({ queryKey: ['heatmap'] });
+      queryClient.invalidateQueries({ queryKey: ['bounds'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+      queryClient.invalidateQueries({ queryKey: ['allTracks'] });
+      queryClient.invalidateQueries({ queryKey: ['sections'] });
+    }
+  });
+
+  const handleDeleteRide = (rideId, rideTitle) => {
+    if (window.confirm(`Delete "${rideTitle}"?\n\nThis will also delete all rated sections for this ride.`)) {
+      if (selectedRide === rideId) {
+        onSelectRide(null);
+      }
+      deleteMutation.mutate(rideId);
+    }
+  };
 
   return (
     <div className="w-80 bg-white shadow-lg flex flex-col h-full">
@@ -102,6 +128,21 @@ export default function Sidebar({
               Sections
             </label>
           </div>
+          {showHeatmap && (
+            <div className="flex items-center gap-2 ml-5">
+              <span className="text-xs text-gray-500">Intensity:</span>
+              <input
+                type="range"
+                min="10"
+                max="100"
+                step="5"
+                value={heatmapIntensity}
+                onChange={(e) => onHeatmapIntensityChange(parseInt(e.target.value))}
+                className="w-24 h-1.5 accent-blue-500"
+              />
+              <span className="text-xs text-gray-500 w-8">{heatmapIntensity}%</span>
+            </div>
+          )}
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
@@ -164,6 +205,7 @@ export default function Sidebar({
                 ride={ride}
                 isSelected={selectedRide === ride.id}
                 onClick={() => onSelectRide(selectedRide === ride.id ? null : ride.id)}
+                onDelete={() => handleDeleteRide(ride.id, ride.title)}
               />
             ))}
           </div>
@@ -198,7 +240,7 @@ export default function Sidebar({
   );
 }
 
-function RideCard({ ride, isSelected, onClick }) {
+function RideCard({ ride, isSelected, onClick, onDelete }) {
   const formattedDate = ride.date
     ? new Date(ride.date).toLocaleDateString('en-US', {
         month: 'short',
@@ -207,10 +249,15 @@ function RideCard({ ride, isSelected, onClick }) {
       })
     : 'Unknown date';
 
+  const handleDelete = (e) => {
+    e.stopPropagation();
+    onDelete();
+  };
+
   return (
     <div
       onClick={onClick}
-      className={`p-3 rounded-lg cursor-pointer transition-colors ${
+      className={`group p-3 rounded-lg cursor-pointer transition-colors ${
         isSelected
           ? 'bg-blue-50 border border-blue-200'
           : 'hover:bg-gray-50 border border-transparent'
@@ -221,11 +268,22 @@ function RideCard({ ride, isSelected, onClick }) {
           <div className="font-medium text-gray-800 truncate">{ride.title}</div>
           <div className="text-sm text-gray-500">{formattedDate}</div>
         </div>
-        <span
-          className={`${BIKE_TYPE_COLORS[ride.bike_type]} text-white text-xs px-2 py-0.5 rounded-full`}
-        >
-          {BIKE_TYPE_LABELS[ride.bike_type]}
-        </span>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={handleDelete}
+            className="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-red-500 p-1 transition-opacity"
+            title="Delete ride"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+          </button>
+          <span
+            className={`${BIKE_TYPE_COLORS[ride.bike_type]} text-white text-xs px-2 py-0.5 rounded-full`}
+          >
+            {BIKE_TYPE_LABELS[ride.bike_type]}
+          </span>
+        </div>
       </div>
       <div className="flex gap-3 mt-1 text-xs text-gray-500">
         <span>{ride.distance_km?.toFixed(1)} km</span>

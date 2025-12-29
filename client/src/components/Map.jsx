@@ -1,5 +1,5 @@
-import { useEffect, useRef, useMemo, useState } from 'react';
-import { MapContainer, TileLayer, Polyline, CircleMarker, useMap, useMapEvents } from 'react-leaflet';
+import { useEffect, useRef, useMemo, useState, useCallback } from 'react';
+import { MapContainer, TileLayer, Polyline, CircleMarker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import { useQuery } from '@tanstack/react-query';
 import 'leaflet/dist/leaflet.css';
 import { getHeatmapData, getMapBounds, getRide, getSections, getAllTracks } from '../api';
@@ -95,10 +95,42 @@ const BIKE_TYPE_TRACK_COLORS = {
   mtb: '#16a34a'      // green
 };
 
+const BIKE_TYPE_LABELS = {
+  road: 'Road',
+  gravel: 'Gravel',
+  mtb: 'MTB'
+};
+
+// Find all tracks that pass near a given point
+function findTracksNearPoint(lat, lng, allTracks, threshold = 0.0003) {
+  const matchingTracks = [];
+
+  for (const track of allTracks) {
+    for (const point of track.track) {
+      const dist = Math.sqrt(
+        Math.pow(point[0] - lat, 2) + Math.pow(point[1] - lng, 2)
+      );
+      if (dist < threshold) {
+        matchingTracks.push(track);
+        break; // Found a match, no need to check more points
+      }
+    }
+  }
+
+  // Sort by date (newest first)
+  return matchingTracks.sort((a, b) => {
+    if (!a.date && !b.date) return 0;
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return new Date(b.date) - new Date(a.date);
+  });
+}
+
 export default function Map({
   selectedRide,
   bikeTypeFilter,
   showHeatmap,
+  heatmapIntensity,
   showSections,
   showAllTracks,
   trackOpacity,
@@ -109,6 +141,7 @@ export default function Map({
   const [startPoint, setStartPoint] = useState(null);
   const [endPoint, setEndPoint] = useState(null);
   const [selectedSection, setSelectedSection] = useState(null);
+  const [trackInfoPopup, setTrackInfoPopup] = useState(null); // { lat, lng, tracks: [] }
 
   // Fetch map bounds
   const { data: bounds } = useQuery({
@@ -183,6 +216,22 @@ export default function Map({
     setEndPoint(null);
   };
 
+  // Handle click on a track to show info popup
+  const handleTrackClick = useCallback((e, clickedTrack) => {
+    if (!allTracks) return;
+
+    const { lat, lng } = e.latlng;
+    const matchingTracks = findTracksNearPoint(lat, lng, allTracks);
+
+    if (matchingTracks.length > 0) {
+      setTrackInfoPopup({
+        lat,
+        lng,
+        tracks: matchingTracks
+      });
+    }
+  }, [allTracks]);
+
   // Default center (will be overridden by bounds)
   const defaultCenter = bounds?.center || [49.23, 7.03];
   const defaultZoom = 12;
@@ -222,7 +271,7 @@ export default function Map({
 
         {/* Heatmap layer */}
         {showHeatmap && heatmapData && heatmapData.length > 0 && (
-          <HeatmapLayer points={heatmapData} />
+          <HeatmapLayer points={heatmapData} intensity={heatmapIntensity} />
         )}
 
         {/* All tracks layer */}
@@ -236,8 +285,24 @@ export default function Map({
               weight: 3,
               opacity: trackOpacity
             }}
+            eventHandlers={{
+              click: (e) => {
+                e.originalEvent.stopPropagation();
+                handleTrackClick(e, track);
+              }
+            }}
           />
         ))}
+
+        {/* Track info popup */}
+        {trackInfoPopup && (
+          <Popup
+            position={[trackInfoPopup.lat, trackInfoPopup.lng]}
+            onClose={() => setTrackInfoPopup(null)}
+          >
+            <TrackInfoContent tracks={trackInfoPopup.tracks} />
+          </Popup>
+        )}
 
         {/* Selected ride track */}
         {selectedRide && rideTrack && (
@@ -401,5 +466,68 @@ function SectionOverlay({ section, isSelected, onClick }) {
         }
       }}
     />
+  );
+}
+
+function TrackInfoContent({ tracks }) {
+  const formatDate = (dateStr) => {
+    if (!dateStr) return 'Unknown date';
+    return new Date(dateStr).toLocaleDateString('en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
+
+  // Get first and last ride dates
+  const sortedByDate = [...tracks].sort((a, b) => {
+    if (!a.date && !b.date) return 0;
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return new Date(a.date) - new Date(b.date);
+  });
+
+  const firstRide = sortedByDate[0];
+  const lastRide = sortedByDate[sortedByDate.length - 1];
+
+  return (
+    <div className="min-w-[200px] max-w-[280px]">
+      <div className="font-semibold text-gray-800 mb-2 pb-2 border-b">
+        {tracks.length} ride{tracks.length !== 1 ? 's' : ''} at this location
+      </div>
+
+      {tracks.length > 1 && (
+        <div className="text-xs text-gray-500 mb-2 pb-2 border-b">
+          <div>First: {formatDate(firstRide?.date)}</div>
+          <div>Last: {formatDate(lastRide?.date)}</div>
+        </div>
+      )}
+
+      <div className="max-h-[200px] overflow-y-auto space-y-2">
+        {tracks.map((track) => (
+          <div key={track.id} className="text-sm">
+            <div className="flex items-start justify-between gap-2">
+              <span className="font-medium text-gray-700 truncate flex-1">
+                {track.title}
+              </span>
+              <span
+                className={`text-xs px-1.5 py-0.5 rounded text-white flex-shrink-0 ${
+                  track.bike_type === 'road' ? 'bg-blue-500' :
+                  track.bike_type === 'gravel' ? 'bg-amber-600' :
+                  'bg-green-600'
+                }`}
+              >
+                {BIKE_TYPE_LABELS[track.bike_type] || track.bike_type}
+              </span>
+            </div>
+            <div className="text-xs text-gray-500">
+              {formatDate(track.date)}
+              {track.distance_km && ` · ${track.distance_km.toFixed(1)} km`}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }

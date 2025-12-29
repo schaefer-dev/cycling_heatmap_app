@@ -16,13 +16,23 @@ export default function ImportModal({ onClose }) {
       queryClient.invalidateQueries({ queryKey: ['heatmap'] });
       queryClient.invalidateQueries({ queryKey: ['bounds'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
+      queryClient.invalidateQueries({ queryKey: ['allTracks'] });
 
-      if (data.errors?.length > 0) {
-        alert(
-          `Imported ${data.summary.success} ride(s). ${data.summary.failed} failed:\n${data.errors
-            .map((e) => `${e.file}: ${e.error}`)
-            .join('\n')}`
-        );
+      const messages = [];
+      messages.push(`Imported ${data.summary.success} ride(s).`);
+
+      if (data.summary.skipped > 0) {
+        messages.push(`\n\nSkipped ${data.summary.skipped} duplicate(s):`);
+        messages.push(data.skipped.map((s) => `• ${s.file}: ${s.reason}`).join('\n'));
+      }
+
+      if (data.summary.failed > 0) {
+        messages.push(`\n\nFailed ${data.summary.failed}:`);
+        messages.push(data.errors.map((e) => `• ${e.file}: ${e.error}`).join('\n'));
+      }
+
+      if (data.summary.skipped > 0 || data.summary.failed > 0) {
+        alert(messages.join('\n'));
       }
 
       onClose();
