@@ -45,7 +45,8 @@ router.get('/', (req, res) => {
 
     res.json(sections.map(s => ({
       ...s,
-      surface_tags: s.surface_tags ? JSON.parse(s.surface_tags) : []
+      surface_tags: s.surface_tags ? JSON.parse(s.surface_tags) : [],
+      track_segment: s.track_segment ? JSON.parse(s.track_segment) : null
     })));
 
   } catch (error) {
@@ -92,6 +93,7 @@ router.post('/', (req, res) => {
       end_lat,
       end_lng,
       end_index,
+      track_segment,
       rating,
       bike_type,
       surface_tags = [],
@@ -137,9 +139,9 @@ router.post('/', (req, res) => {
     db.prepare(`
       INSERT INTO sections (
         id, ride_id, start_lat, start_lng, start_index,
-        end_lat, end_lng, end_index, rating, bike_type, surface_tags, notes
+        end_lat, end_lng, end_index, track_segment, rating, bike_type, surface_tags, notes
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       sectionId,
       ride_id,
@@ -149,6 +151,7 @@ router.post('/', (req, res) => {
       end_lat,
       end_lng,
       end_index || null,
+      track_segment ? JSON.stringify(track_segment) : null,
       rating,
       bike_type,
       JSON.stringify(surface_tags),
@@ -159,7 +162,8 @@ router.post('/', (req, res) => {
 
     res.status(201).json({
       ...created,
-      surface_tags: JSON.parse(created.surface_tags)
+      surface_tags: JSON.parse(created.surface_tags),
+      track_segment: created.track_segment ? JSON.parse(created.track_segment) : null
     });
 
   } catch (error) {

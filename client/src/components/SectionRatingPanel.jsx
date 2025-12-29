@@ -27,6 +27,7 @@ export default function SectionRatingPanel({
   biketype,
   startPoint,
   endPoint,
+  trackSegment,
   onCancel,
   onSave
 }) {
@@ -66,6 +67,7 @@ export default function SectionRatingPanel({
       end_lat: endPoint.lat,
       end_lng: endPoint.lng,
       end_index: endPoint.index,
+      track_segment: trackSegment,
       rating,
       bike_type: biketype,
       surface_tags: selectedTags,

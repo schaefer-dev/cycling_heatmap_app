@@ -260,12 +260,13 @@ export default function Map({
       )}
 
       {/* Section rating panel */}
-      {startPoint && endPoint && rideData && (
+      {startPoint && endPoint && rideData && sectionTrack && (
         <SectionRatingPanel
           rideId={rideData.id}
           biketype={rideData.bike_type}
           startPoint={startPoint}
           endPoint={endPoint}
+          trackSegment={sectionTrack}
           onCancel={handleCancelSelection}
           onSave={handleSaveSection}
         />
@@ -302,9 +303,8 @@ function MapClickHandler({ trackPoints, startPoint, onSelectStart, onSelectEnd }
 }
 
 function SectionOverlay({ section }) {
-  // For now, we'll draw a line between start and end points
-  // In future iterations, this could follow the actual track
-  const positions = [
+  // Use the stored track segment if available, otherwise fall back to straight line
+  const positions = section.track_segment || [
     [section.start_lat, section.start_lng],
     [section.end_lat, section.end_lng]
   ];

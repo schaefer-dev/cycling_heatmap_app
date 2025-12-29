@@ -59,6 +59,7 @@ function initializeDatabase() {
       end_lat REAL NOT NULL,
       end_lng REAL NOT NULL,
       end_index INTEGER,
+      track_segment TEXT,
       rating TEXT CHECK(rating IN ('excellent', 'good', 'challenging', 'hard', 'unridable')),
       bike_type TEXT CHECK(bike_type IN ('road', 'gravel', 'mtb')),
       surface_tags TEXT,
@@ -80,5 +81,13 @@ function initializeDatabase() {
 }
 
 initializeDatabase();
+
+// Migration: Add track_segment column if it doesn't exist
+try {
+  db.exec(`ALTER TABLE sections ADD COLUMN track_segment TEXT`);
+  console.log('Migration: Added track_segment column to sections table');
+} catch (e) {
+  // Column already exists, ignore
+}
 
 module.exports = db;
