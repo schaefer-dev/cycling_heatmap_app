@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, forwardRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getRides, getStats, deleteRide, updateRide } from '../api';
 
@@ -85,6 +85,19 @@ export default function Sidebar({
       renameMutation.mutate({ id: rideId, title: newTitle.trim() });
     }
   };
+
+  // Refs for scrolling to selected ride
+  const rideRefs = useRef({});
+
+  // Scroll to selected ride when it changes
+  useEffect(() => {
+    if (selectedRide && rideRefs.current[selectedRide]) {
+      rideRefs.current[selectedRide].scrollIntoView({
+        behavior: 'smooth',
+        block: 'center'
+      });
+    }
+  }, [selectedRide]);
 
   return (
     <div className="w-80 bg-white shadow-lg flex flex-col h-full">
@@ -235,6 +248,7 @@ export default function Sidebar({
             {rides?.map((ride) => (
               <RideCard
                 key={ride.id}
+                ref={(el) => { rideRefs.current[ride.id] = el; }}
                 ride={ride}
                 isSelected={selectedRide === ride.id}
                 onClick={() => onSelectRide(selectedRide === ride.id ? null : ride.id)}
@@ -274,7 +288,7 @@ export default function Sidebar({
   );
 }
 
-function RideCard({ ride, isSelected, onClick, onDelete, onRename }) {
+const RideCard = forwardRef(function RideCard({ ride, isSelected, onClick, onDelete, onRename }, ref) {
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(ride.title);
 
@@ -321,6 +335,7 @@ function RideCard({ ride, isSelected, onClick, onDelete, onRename }) {
 
   return (
     <div
+      ref={ref}
       onClick={isEditing ? undefined : onClick}
       className={`group p-3 rounded-lg cursor-pointer transition-colors ${
         isSelected
@@ -383,4 +398,4 @@ function RideCard({ ride, isSelected, onClick, onDelete, onRename }) {
       </div>
     </div>
   );
-}
+});

@@ -135,7 +135,8 @@ export default function Map({
   showSections,
   showAllTracks,
   trackOpacity,
-  mapSaturation
+  mapSaturation,
+  onSelectRide
 }) {
   const mapRef = useRef(null);
   const [isSelectingSection, setIsSelectingSection] = useState(false);
@@ -327,20 +328,43 @@ export default function Map({
             position={[trackInfoPopup.lat, trackInfoPopup.lng]}
             onClose={() => setTrackInfoPopup(null)}
           >
-            <TrackInfoContent tracks={trackInfoPopup.tracks} />
+            <TrackInfoContent
+              tracks={trackInfoPopup.tracks}
+              selectedRide={selectedRide}
+              onPreviewRide={(rideId) => {
+                onSelectRide(rideId);
+                setTrackInfoPopup(null);
+              }}
+            />
           </Popup>
         )}
 
-        {/* Selected ride track */}
+        {/* Selected ride track - with glow effect for visibility */}
         {selectedRide && rideTrack && (
-          <Polyline
-            positions={rideTrack}
-            pathOptions={{
-              color: '#3b82f6',
-              weight: 4,
-              opacity: 0.8
-            }}
-          />
+          <>
+            {/* Glow/outline layer */}
+            <Polyline
+              positions={rideTrack}
+              pathOptions={{
+                color: '#ffffff',
+                weight: 10,
+                opacity: 0.8,
+                lineCap: 'round',
+                lineJoin: 'round'
+              }}
+            />
+            {/* Main track layer */}
+            <Polyline
+              positions={rideTrack}
+              pathOptions={{
+                color: '#3b82f6',
+                weight: 6,
+                opacity: 1,
+                lineCap: 'round',
+                lineJoin: 'round'
+              }}
+            />
+          </>
         )}
 
         {/* Section selection highlight */}
@@ -439,6 +463,19 @@ export default function Map({
           onClose={() => setSelectedSection(null)}
         />
       )}
+
+      {/* Clear preview button - shown when a ride is selected */}
+      {selectedRide && !isSelectingSection && (
+        <button
+          onClick={() => onSelectRide(null)}
+          className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-[1000] bg-white hover:bg-gray-50 shadow-lg px-4 py-2 rounded-lg font-medium text-gray-700 flex items-center gap-2 border border-gray-200"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+          Clear preview
+        </button>
+      )}
     </>
   );
 }
@@ -507,7 +544,7 @@ function SectionOverlay({ section, isSelected, onClick }) {
   );
 }
 
-function TrackInfoContent({ tracks }) {
+function TrackInfoContent({ tracks, selectedRide, onPreviewRide }) {
   const formatDate = (dateStr) => {
     if (!dateStr) return 'Unknown date';
     return new Date(dateStr).toLocaleDateString('en-US', {
@@ -544,20 +581,32 @@ function TrackInfoContent({ tracks }) {
 
       <div className="max-h-[200px] overflow-y-auto space-y-2">
         {tracks.map((track) => (
-          <div key={track.id} className="text-sm">
+          <div key={track.id} className="text-sm group">
             <div className="flex items-start justify-between gap-2">
               <span className="font-medium text-gray-700 truncate flex-1">
                 {track.title}
               </span>
-              <span
-                className={`text-xs px-1.5 py-0.5 rounded text-white flex-shrink-0 ${
-                  track.bike_type === 'road' ? 'bg-blue-500' :
-                  track.bike_type === 'gravel' ? 'bg-amber-600' :
-                  'bg-green-600'
-                }`}
-              >
-                {BIKE_TYPE_LABELS[track.bike_type] || track.bike_type}
-              </span>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => onPreviewRide(track.id)}
+                  className="text-gray-400 hover:text-blue-500 p-0.5 transition-colors"
+                  title="Preview this ride"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                  </svg>
+                </button>
+                <span
+                  className={`text-xs px-1.5 py-0.5 rounded text-white flex-shrink-0 ${
+                    track.bike_type === 'road' ? 'bg-blue-500' :
+                    track.bike_type === 'gravel' ? 'bg-amber-600' :
+                    'bg-green-600'
+                  }`}
+                >
+                  {BIKE_TYPE_LABELS[track.bike_type] || track.bike_type}
+                </span>
+              </div>
             </div>
             <div className="text-xs text-gray-500">
               {formatDate(track.date)}
