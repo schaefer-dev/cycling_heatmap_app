@@ -26,6 +26,8 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+CLAUDE.md
+AGENTS.md
 
 # Temp files
 *.tmp
