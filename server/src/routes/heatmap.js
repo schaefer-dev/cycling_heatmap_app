@@ -4,28 +4,20 @@ const db = require('../db');
 const router = express.Router();
 
 // GET /api/heatmap - Get track points for heatmap
-// Uses full track_points for high resolution, with optional sampling for performance
+// Uses full track_points for maximum resolution
 router.get('/', (req, res) => {
   try {
     const { bike_type } = req.query;
 
-    // Use full track_points for better resolution
-    // Sample every Nth point to balance resolution vs performance
-    const sampleRate = 3; // Take every 3rd point (adjust if needed)
-
-    let query = `
-      SELECT tp.lat, tp.lng
-      FROM track_points tp
-      WHERE tp.point_index % ? = 0
-    `;
-    const params = [sampleRate];
+    let query = `SELECT tp.lat, tp.lng FROM track_points tp`;
+    const params = [];
 
     if (bike_type && ['road', 'gravel', 'mtb'].includes(bike_type)) {
       query = `
         SELECT tp.lat, tp.lng
         FROM track_points tp
         INNER JOIN rides r ON tp.ride_id = r.id
-        WHERE tp.point_index % ? = 0 AND r.bike_type = ?
+        WHERE r.bike_type = ?
       `;
       params.push(bike_type);
     }

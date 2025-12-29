@@ -4,17 +4,17 @@ import L from 'leaflet';
 import 'leaflet.heat';
 
 // Calculate radius and blur based on zoom level
-// With full track points (sampled every 3rd), we have much denser data
+// With full track points we have dense data, radius ensures smooth trails
 function getHeatmapParams(zoom) {
-  if (zoom >= 17) {
-    return { radius: 18, blur: 22 };
-  } else if (zoom >= 15) {
-    return { radius: 15, blur: 18 };
-  } else if (zoom >= 13) {
+  if (zoom >= 18) {
     return { radius: 12, blur: 15 };
-  } else {
-    // Zoom 12 and below - smaller for overview
+  } else if (zoom >= 16) {
     return { radius: 10, blur: 12 };
+  } else if (zoom >= 14) {
+    return { radius: 8, blur: 10 };
+  } else {
+    // Zoom 13 and below - smaller for overview
+    return { radius: 6, blur: 8 };
   }
 }
 
@@ -66,12 +66,13 @@ export default function HeatmapLayer({ points, intensity = 50, opacity = 0.8 }) 
 
     heatLayer.addTo(map);
 
-    // Style the heatmap canvas: disable pointer events and apply opacity
+    // Style the heatmap canvas and apply opacity
     // The canvas is created lazily, so we need to wait for it
     const styleCanvas = () => {
       const canvas = heatLayer._canvas;
       if (canvas) {
-        canvas.style.pointerEvents = 'none';
+        // Allow pointer events so clicks can be detected by map click handler
+        canvas.style.pointerEvents = 'auto';
         canvas.style.opacity = opacity;
       }
     };

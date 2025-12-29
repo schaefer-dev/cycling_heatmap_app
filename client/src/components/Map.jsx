@@ -171,11 +171,10 @@ export default function Map({
     enabled: showSections
   });
 
-  // Fetch all tracks when showAllTracks is enabled
+  // Fetch all tracks - used for both "show all tracks" display and click detection
   const { data: allTracks } = useQuery({
     queryKey: ['allTracks', bikeTypeFilter],
-    queryFn: () => getAllTracks(bikeTypeFilter),
-    enabled: showAllTracks
+    queryFn: () => getAllTracks(bikeTypeFilter)
   });
 
   // Convert ride track to polyline positions
@@ -217,7 +216,7 @@ export default function Map({
     setEndPoint(null);
   };
 
-  // Handle click on a track to show info popup
+  // Handle click on a track or heatmap to show info popup
   const handleTrackClick = useCallback((e, clickedTrack) => {
     if (!allTracks) return;
 
@@ -232,6 +231,22 @@ export default function Map({
       });
     }
   }, [allTracks]);
+
+  // Handle general map click (for heatmap clicks)
+  const handleMapClick = useCallback((e) => {
+    if (!allTracks || isSelectingSection) return;
+
+    const { lat, lng } = e.latlng;
+    const matchingTracks = findTracksNearPoint(lat, lng, allTracks);
+
+    if (matchingTracks.length > 0) {
+      setTrackInfoPopup({
+        lat,
+        lng,
+        tracks: matchingTracks
+      });
+    }
+  }, [allTracks, isSelectingSection]);
 
   // Default center (will be overridden by bounds)
   const defaultCenter = bounds?.center || [49.23, 7.03];
@@ -261,6 +276,11 @@ export default function Map({
 
         {/* Create custom panes for proper z-index layering */}
         <MapPanes />
+
+        {/* General click handler for heatmap/map clicks */}
+        {!isSelectingSection && (
+          <GeneralMapClickHandler onMapClick={handleMapClick} />
+        )}
 
         {/* Fit to bounds on load */}
         {bounds && !selectedRide && <FitBounds bounds={bounds} />}
@@ -438,6 +458,17 @@ function MapClickHandler({ trackPoints, startPoint, onSelectStart, onSelectEnd }
       } else {
         onSelectEnd(closest);
       }
+    }
+  });
+
+  return null;
+}
+
+// General map click handler for heatmap/track info popup
+function GeneralMapClickHandler({ onMapClick }) {
+  useMapEvents({
+    click(e) {
+      onMapClick(e);
     }
   });
 
