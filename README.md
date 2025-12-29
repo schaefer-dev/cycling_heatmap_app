@@ -12,10 +12,10 @@ A personal application for archiving cycling rides and rating road/trail section
 
 ## Screenshots
 
-Simple Heatmap Example:
+#### Simple Heatmap Example:
 ![Heatmap Example](assets/screenshots/readme_screenshot_01.jpg)
 
-List rides that went past a specific location (onclick event on heatmap):
+#### List rides that went past a specific location (onclick event on heatmap):
 ![Rides that went past a specific location](assets/screenshots/readme_screenshot_02.jpg)
 
 

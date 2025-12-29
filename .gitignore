@@ -28,6 +28,7 @@ Thumbs.db
 *.swo
 CLAUDE.md
 AGENTS.md
+docs/
 
 # Temp files
 *.tmp
