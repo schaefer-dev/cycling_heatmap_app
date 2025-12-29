@@ -1,0 +1,29 @@
+{
+  "name": "cycling-map",
+  "version": "1.0.0",
+  "description": "Cycling ride archive with section ratings",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "node server/src/index.js",
+    "client": "npm run dev --prefix client",
+    "build": "npm run build --prefix client",
+    "setup": "npm install && cd client && npm install"
+  },
+  "keywords": [
+    "cycling",
+    "gpx",
+    "heatmap"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "better-sqlite3": "^12.5.0",
+    "concurrently": "^9.2.1",
+    "cors": "^2.8.5",
+    "express": "^5.2.1",
+    "fast-xml-parser": "^5.3.3",
+    "multer": "^2.0.2",
+    "uuid": "^13.0.0"
+  }
+}

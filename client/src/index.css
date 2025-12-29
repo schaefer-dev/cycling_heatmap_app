@@ -1,0 +1,46 @@
+@import "tailwindcss";
+
+/* Leaflet container must have explicit height */
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+}
+
+/* Ensure body takes full height */
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* Rating colors */
+.rating-excellent { color: #22c55e; }
+.rating-good { color: #84cc16; }
+.rating-challenging { color: #eab308; }
+.rating-hard { color: #f97316; }
+.rating-unridable { color: #ef4444; }
+
+.bg-rating-excellent { background-color: #22c55e; }
+.bg-rating-good { background-color: #84cc16; }
+.bg-rating-challenging { background-color: #eab308; }
+.bg-rating-hard { background-color: #f97316; }
+.bg-rating-unridable { background-color: #ef4444; }

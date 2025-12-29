@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Database
+data/*.db
+data/*.db-journal
+
+# Build output
+client/dist/
+
+# Environment
+.env
+.env.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Temp files
+*.tmp
+.cache/
+
+# personal gpx examples
+sample_gpx/
