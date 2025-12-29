@@ -46,6 +46,56 @@ router.get('/', (req, res) => {
   }
 });
 
+// GET /api/rides/near-point - Find all rides that pass near a given point
+// IMPORTANT: This must be defined BEFORE /:id route to avoid "near-point" being matched as an ID
+router.get('/near-point', (req, res) => {
+  try {
+    const { lat, lng, threshold = 0.0003, bike_type } = req.query;
+
+    if (!lat || !lng) {
+      return res.status(400).json({ error: 'lat and lng are required' });
+    }
+
+    const latNum = parseFloat(lat);
+    const lngNum = parseFloat(lng);
+    const thresholdNum = parseFloat(threshold); // ~30m default
+
+    if (isNaN(latNum) || isNaN(lngNum)) {
+      return res.status(400).json({ error: 'Invalid lat/lng values' });
+    }
+
+    // Find all rides that have at least one track point near the clicked location
+    let query = `
+      SELECT DISTINCT r.id, r.title, r.date, r.bike_type, r.distance_km, r.elevation_gain_m
+      FROM rides r
+      INNER JOIN track_points tp ON tp.ride_id = r.id
+      WHERE tp.lat BETWEEN ? AND ?
+        AND tp.lng BETWEEN ? AND ?
+    `;
+    const params = [
+      latNum - thresholdNum,
+      latNum + thresholdNum,
+      lngNum - thresholdNum,
+      lngNum + thresholdNum
+    ];
+
+    if (bike_type && ['road', 'gravel', 'mtb'].includes(bike_type)) {
+      query += ' AND r.bike_type = ?';
+      params.push(bike_type);
+    }
+
+    query += ' ORDER BY r.date DESC';
+
+    const rides = db.prepare(query).all(...params);
+
+    res.json(rides);
+
+  } catch (error) {
+    console.error('Error finding rides near point:', error);
+    res.status(500).json({ error: 'Failed to find rides near point' });
+  }
+});
+
 // GET /api/rides/:id - Get single ride with track data
 router.get('/:id', (req, res) => {
   try {

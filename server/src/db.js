@@ -90,4 +90,12 @@ try {
   // Column already exists, ignore
 }
 
+// Migration: Add spatial index on track_points for efficient near-point queries
+try {
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_track_points_lat_lng ON track_points(lat, lng)`);
+  console.log('Migration: Added lat/lng index on track_points');
+} catch (e) {
+  // Index already exists, ignore
+}
+
 module.exports = db;

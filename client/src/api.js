@@ -55,6 +55,13 @@ export const deleteRide = async (id) => {
   return data;
 };
 
+export const getRidesNearPoint = async (lat, lng, bikeType, threshold = 0.0003) => {
+  const params = { lat, lng, threshold };
+  if (bikeType) params.bike_type = bikeType;
+  const { data } = await api.get('/rides/near-point', { params });
+  return data;
+};
+
 // Sections
 export const getSections = async (filters = {}) => {
   const { data } = await api.get('/sections', { params: filters });

@@ -2,7 +2,7 @@ import { useEffect, useRef, useMemo, useState, useCallback } from 'react';
 import { MapContainer, TileLayer, Polyline, CircleMarker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import { useQuery } from '@tanstack/react-query';
 import 'leaflet/dist/leaflet.css';
-import { getHeatmapData, getMapBounds, getRide, getSections, getAllTracks } from '../api';
+import { getHeatmapData, getMapBounds, getRide, getSections, getAllTracks, getRidesNearPoint } from '../api';
 import HeatmapLayer from './HeatmapLayer';
 import SectionRatingPanel from './SectionRatingPanel';
 import SectionDetailsPanel from './SectionDetailsPanel';
@@ -233,20 +233,26 @@ export default function Map({
   }, [allTracks]);
 
   // Handle general map click (for heatmap clicks)
-  const handleMapClick = useCallback((e) => {
-    if (!allTracks || isSelectingSection) return;
+  const handleMapClick = useCallback(async (e) => {
+    if (isSelectingSection) return;
 
     const { lat, lng } = e.latlng;
-    const matchingTracks = findTracksNearPoint(lat, lng, allTracks);
 
-    if (matchingTracks.length > 0) {
-      setTrackInfoPopup({
-        lat,
-        lng,
-        tracks: matchingTracks
-      });
+    try {
+      // Use backend API to find rides near the clicked point (uses full track_points)
+      const rides = await getRidesNearPoint(lat, lng, bikeTypeFilter);
+
+      if (rides.length > 0) {
+        setTrackInfoPopup({
+          lat,
+          lng,
+          tracks: rides
+        });
+      }
+    } catch (error) {
+      console.error('Error finding rides near point:', error);
     }
-  }, [allTracks, isSelectingSection]);
+  }, [isSelectingSection, bikeTypeFilter]);
 
   // Default center (will be overridden by bounds)
   const defaultCenter = bounds?.center || [49.23, 7.03];
