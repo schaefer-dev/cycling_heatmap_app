@@ -6,11 +6,20 @@ A personal application for archiving cycling rides and rating road/trail section
 
 - Import rides from Garmin GPX files (single or bulk)
 - Categorize rides by bike type (road, gravel, MTB)
-- Interactive heatmap of all rides
-- Rate sections of routes with 5-level ratings + surface tags
-- Filter by bike type
+- Interactive heatmap of all different ride types
+- Rate sections of routes with 5-level rating system + add surface tags to be able to easily look up conditions of various sections
+- Look up individual rides that went past a specific location on the map
+
+## Screenshots
+
+![Heatmap Example](assets/screenshots/readme_screenshot_01.jpg)
+
+![Rides that went past a specific location](assets/screenshots/readme_screenshot_02.jpg)
+
 
 ## Quick Start
+
+Setup Node.js (tested with version v25.2.1 I suggest using nvm) as explained [here](https://nodejs.org/en/download/current).
 
 ```bash
 # Install dependencies
