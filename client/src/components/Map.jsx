@@ -165,23 +165,26 @@ export default function Map({
   const [selectedSection, setSelectedSection] = useState(null);
   const [trackInfoPopup, setTrackInfoPopup] = useState(null); // { lat, lng, tracks: [] }
   const [savedMapView, setSavedMapView] = useState(null); // { center, zoom } - saved when preview starts
+  const [savedPopup, setSavedPopup] = useState(null); // saved popup data to restore after preview
 
   // Callback when map controller is ready
   const handleMapReady = useCallback((controller) => {
     mapControllerRef.current = controller;
   }, []);
 
-  // Handle preview ride - saves current view before selecting
+  // Handle preview ride - saves current view and popup before selecting
   const handlePreviewRide = useCallback((rideId) => {
     // Save current map view before zooming to the ride
     if (mapControllerRef.current) {
       setSavedMapView(mapControllerRef.current.getView());
     }
+    // Save the current popup data so we can restore it
+    setSavedPopup(trackInfoPopup);
     onSelectRide(rideId);
     setTrackInfoPopup(null);
-  }, [onSelectRide]);
+  }, [onSelectRide, trackInfoPopup]);
 
-  // Handle clear preview - restores saved view
+  // Handle clear preview - restores saved view and popup
   const handleClearPreview = useCallback(() => {
     onSelectRide(null);
     if (savedMapView && mapControllerRef.current) {
@@ -189,9 +192,20 @@ export default function Map({
       setTimeout(() => {
         mapControllerRef.current.setView(savedMapView.center, savedMapView.zoom);
         setSavedMapView(null);
+        // Restore the popup after the map has moved back
+        setTimeout(() => {
+          if (savedPopup) {
+            setTrackInfoPopup(savedPopup);
+            setSavedPopup(null);
+          }
+        }, 300);
       }, 50);
+    } else if (savedPopup) {
+      // No map view to restore, just restore popup
+      setTrackInfoPopup(savedPopup);
+      setSavedPopup(null);
     }
-  }, [onSelectRide, savedMapView]);
+  }, [onSelectRide, savedMapView, savedPopup]);
 
   // Fetch map bounds
   const { data: bounds } = useQuery({
