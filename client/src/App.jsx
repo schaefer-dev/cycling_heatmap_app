@@ -20,6 +20,8 @@ function App() {
   const [showHeatmap, setShowHeatmap] = useState(true);
   const [showSections, setShowSections] = useState(true);
   const [showAllTracks, setShowAllTracks] = useState(false);
+  const [trackOpacity, setTrackOpacity] = useState(0.85);
+  const [mapSaturation, setMapSaturation] = useState(100);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -37,6 +39,10 @@ function App() {
           onShowSectionsChange={setShowSections}
           showAllTracks={showAllTracks}
           onShowAllTracksChange={setShowAllTracks}
+          trackOpacity={trackOpacity}
+          onTrackOpacityChange={setTrackOpacity}
+          mapSaturation={mapSaturation}
+          onMapSaturationChange={setMapSaturation}
         />
 
         {/* Map */}
@@ -47,6 +53,8 @@ function App() {
             showHeatmap={showHeatmap}
             showSections={showSections}
             showAllTracks={showAllTracks}
+            trackOpacity={trackOpacity}
+            mapSaturation={mapSaturation}
             onSelectRide={setSelectedRide}
           />
         </div>

@@ -47,6 +47,25 @@ function FitToRide({ trackPoints }) {
   return null;
 }
 
+// Component to create custom map panes with proper z-index
+function MapPanes() {
+  const map = useMap();
+
+  useEffect(() => {
+    // Create panes if they don't exist
+    if (!map.getPane('tracksPane')) {
+      const tracksPane = map.createPane('tracksPane');
+      tracksPane.style.zIndex = 401;
+    }
+    if (!map.getPane('sectionsPane')) {
+      const sectionsPane = map.createPane('sectionsPane');
+      sectionsPane.style.zIndex = 410;
+    }
+  }, [map]);
+
+  return null;
+}
+
 // Find closest point on track to a clicked location
 function findClosestPoint(clickLat, clickLng, trackPoints) {
   let closestIndex = 0;
@@ -81,7 +100,9 @@ export default function Map({
   bikeTypeFilter,
   showHeatmap,
   showSections,
-  showAllTracks
+  showAllTracks,
+  trackOpacity,
+  mapSaturation
 }) {
   const mapRef = useRef(null);
   const [isSelectingSection, setIsSelectingSection] = useState(false);
@@ -166,8 +187,17 @@ export default function Map({
   const defaultCenter = bounds?.center || [49.23, 7.03];
   const defaultZoom = 12;
 
+  // Calculate grayscale value (0% saturation = 100% grayscale)
+  const grayscaleValue = 100 - mapSaturation;
+
   return (
     <>
+      {/* Dynamic style for map tile saturation */}
+      <style>
+        {`.leaflet-tile-pane {
+          filter: grayscale(${grayscaleValue}%);
+        }`}
+      </style>
       <MapContainer
         center={defaultCenter}
         zoom={defaultZoom}
@@ -178,6 +208,9 @@ export default function Map({
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
+
+        {/* Create custom panes for proper z-index layering */}
+        <MapPanes />
 
         {/* Fit to bounds on load */}
         {bounds && !selectedRide && <FitBounds bounds={bounds} />}
@@ -197,10 +230,11 @@ export default function Map({
           <Polyline
             key={track.id}
             positions={track.track}
+            pane="tracksPane"
             pathOptions={{
               color: BIKE_TYPE_TRACK_COLORS[track.bike_type] || '#888',
-              weight: 2,
-              opacity: 0.6
+              weight: 3,
+              opacity: trackOpacity
             }}
           />
         ))}
@@ -354,6 +388,7 @@ function SectionOverlay({ section, isSelected, onClick }) {
   return (
     <Polyline
       positions={positions}
+      pane="sectionsPane"
       pathOptions={{
         color: RATING_COLORS[section.rating] || '#888',
         weight: isSelected ? 8 : 6,

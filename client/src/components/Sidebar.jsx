@@ -24,7 +24,11 @@ export default function Sidebar({
   showSections,
   onShowSectionsChange,
   showAllTracks,
-  onShowAllTracksChange
+  onShowAllTracksChange,
+  trackOpacity,
+  onTrackOpacityChange,
+  mapSaturation,
+  onMapSaturationChange
 }) {
   // Fetch rides
   const { data: rides, isLoading: ridesLoading } = useQuery({
@@ -107,6 +111,34 @@ export default function Sidebar({
             />
             Show all tracks
           </label>
+          {showAllTracks && (
+            <div className="flex items-center gap-2 ml-5">
+              <span className="text-xs text-gray-500">Opacity:</span>
+              <input
+                type="range"
+                min="0.1"
+                max="1"
+                step="0.05"
+                value={trackOpacity}
+                onChange={(e) => onTrackOpacityChange(parseFloat(e.target.value))}
+                className="w-24 h-1.5 accent-blue-500"
+              />
+              <span className="text-xs text-gray-500 w-8">{Math.round(trackOpacity * 100)}%</span>
+            </div>
+          )}
+          <div className="flex items-center gap-2 pt-2 border-t mt-2">
+            <span className="text-xs text-gray-500">Map color:</span>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              step="5"
+              value={mapSaturation}
+              onChange={(e) => onMapSaturationChange(parseInt(e.target.value))}
+              className="w-24 h-1.5 accent-blue-500"
+            />
+            <span className="text-xs text-gray-500 w-8">{mapSaturation}%</span>
+          </div>
         </div>
       </div>
 
