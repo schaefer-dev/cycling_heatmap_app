@@ -1,10 +1,38 @@
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet.heat';
 
+// Calculate radius and blur based on zoom level
+// With full track points (sampled every 3rd), we have much denser data
+function getHeatmapParams(zoom) {
+  if (zoom >= 17) {
+    return { radius: 18, blur: 22 };
+  } else if (zoom >= 15) {
+    return { radius: 15, blur: 18 };
+  } else if (zoom >= 13) {
+    return { radius: 12, blur: 15 };
+  } else {
+    // Zoom 12 and below - smaller for overview
+    return { radius: 10, blur: 12 };
+  }
+}
+
 export default function HeatmapLayer({ points, intensity = 50 }) {
   const map = useMap();
+  const [zoom, setZoom] = useState(map.getZoom());
+
+  // Track zoom changes
+  const handleZoom = useCallback(() => {
+    setZoom(map.getZoom());
+  }, [map]);
+
+  useEffect(() => {
+    map.on('zoomend', handleZoom);
+    return () => {
+      map.off('zoomend', handleZoom);
+    };
+  }, [map, handleZoom]);
 
   useEffect(() => {
     if (!points || points.length === 0) return;
@@ -15,14 +43,17 @@ export default function HeatmapLayer({ points, intensity = 50 }) {
     const pointIntensity = 0.3 + (intensity / 100) * 0.7; // 0.3 to 1.0
     const maxValue = 1.5 - (intensity / 100) * 1.2; // 1.5 to 0.3 (lower = more sensitive)
 
+    // Get zoom-appropriate radius and blur
+    const { radius, blur } = getHeatmapParams(zoom);
+
     // Create heatmap layer
     // Points are [lat, lng] pairs with intensity value
     const heatData = points.map(([lat, lng]) => [lat, lng, pointIntensity]);
 
     const heatLayer = L.heatLayer(heatData, {
-      radius: 15,
-      blur: 20,
-      maxZoom: 17,
+      radius,
+      blur,
+      maxZoom: 18,
       max: maxValue,
       gradient: {
         0.0: '#0000ff',
@@ -56,7 +87,7 @@ export default function HeatmapLayer({ points, intensity = 50 }) {
       map.off('zoomend moveend', disablePointerEvents);
       map.removeLayer(heatLayer);
     };
-  }, [map, points, intensity]);
+  }, [map, points, intensity, zoom]);
 
   return null;
 }

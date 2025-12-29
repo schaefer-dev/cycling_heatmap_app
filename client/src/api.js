@@ -16,12 +16,29 @@ export const getRide = async (id) => {
   return data;
 };
 
-export const importRides = async (files, bikeType) => {
+export const previewRides = async (files) => {
+  const formData = new FormData();
+  for (const file of files) {
+    formData.append('gpx', file);
+  }
+  const { data } = await api.post('/rides/preview', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  });
+  return data;
+};
+
+export const importRides = async (files, bikeType, options = {}) => {
   const formData = new FormData();
   for (const file of files) {
     formData.append('gpx', file);
   }
   formData.append('bike_type', bikeType);
+  if (options.skipNonCycling) {
+    formData.append('skip_non_cycling', 'true');
+  }
+  if (options.useDetectedBikeType) {
+    formData.append('use_detected_bike_type', 'true');
+  }
   const { data } = await api.post('/rides', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   });

@@ -4,6 +4,7 @@ node_modules/
 # Database
 data/*.db
 data/*.db-journal
+data/
 
 # Build output
 client/dist/

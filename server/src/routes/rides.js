@@ -134,11 +134,98 @@ function checkDuplicate(parsed) {
   return null;
 }
 
-// POST /api/rides - Import new ride from GPX
-router.post('/', upload.array('gpx', 50), async (req, res) => {
+// POST /api/rides/preview - Preview GPX files before importing (analyze activity types)
+router.post('/preview', upload.array('gpx', 100), async (req, res) => {
   try {
     const files = req.files;
-    const { bike_type = 'gravel' } = req.body;
+
+    if (!files || files.length === 0) {
+      return res.status(400).json({ error: 'No GPX files provided' });
+    }
+
+    const previews = [];
+    const errors = [];
+
+    for (const file of files) {
+      try {
+        const gpxContent = file.buffer.toString('utf-8');
+        const parsed = parseGPX(gpxContent, file.originalname);
+
+        // Check for duplicates
+        const duplicate = checkDuplicate(parsed);
+
+        previews.push({
+          filename: file.originalname,
+          title: parsed.name,
+          date: parsed.date,
+          distance_km: parsed.totalDistance,
+          elevation_gain_m: parsed.totalElevationGain,
+          activityType: parsed.activityType,
+          isCycling: parsed.isCycling,
+          detectedBikeType: parsed.detectedBikeType,
+          isDuplicate: !!duplicate,
+          duplicateOf: duplicate ? duplicate.title : null,
+          pointCount: parsed.points.length
+        });
+      } catch (parseError) {
+        errors.push({
+          filename: file.originalname,
+          error: parseError.message
+        });
+      }
+    }
+
+    // Sort by date (newest first)
+    previews.sort((a, b) => {
+      if (!a.date && !b.date) return 0;
+      if (!a.date) return 1;
+      if (!b.date) return -1;
+      return new Date(b.date) - new Date(a.date);
+    });
+
+    // Summary stats
+    const cyclingCount = previews.filter(p => p.isCycling).length;
+    const nonCyclingCount = previews.filter(p => !p.isCycling && p.activityType !== 'unknown').length;
+    const unknownCount = previews.filter(p => p.activityType === 'unknown').length;
+    const duplicateCount = previews.filter(p => p.isDuplicate).length;
+
+    res.json({
+      previews,
+      errors,
+      summary: {
+        total: files.length,
+        cycling: cyclingCount,
+        nonCycling: nonCyclingCount,
+        unknown: unknownCount,
+        duplicates: duplicateCount,
+        parseErrors: errors.length,
+        byBikeType: {
+          road: previews.filter(p => p.detectedBikeType === 'road').length,
+          gravel: previews.filter(p => p.detectedBikeType === 'gravel').length,
+          mtb: previews.filter(p => p.detectedBikeType === 'mtb').length,
+          undetected: previews.filter(p => p.isCycling && !p.detectedBikeType).length
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error previewing rides:', error);
+    res.status(500).json({ error: 'Failed to preview rides' });
+  }
+});
+
+// POST /api/rides - Import new ride from GPX
+router.post('/', upload.array('gpx', 100), async (req, res) => {
+  try {
+    const files = req.files;
+    const {
+      bike_type = 'gravel',
+      skip_non_cycling = 'false',
+      use_detected_bike_type = 'false'
+    } = req.body;
+
+    const skipNonCycling = skip_non_cycling === 'true';
+    const useDetectedBikeType = use_detected_bike_type === 'true';
 
     if (!files || files.length === 0) {
       return res.status(400).json({ error: 'No GPX files provided' });
@@ -155,7 +242,16 @@ router.post('/', upload.array('gpx', 50), async (req, res) => {
     for (const file of files) {
       try {
         const gpxContent = file.buffer.toString('utf-8');
-        const parsed = parseGPX(gpxContent);
+        const parsed = parseGPX(gpxContent, file.originalname);
+
+        // Skip non-cycling activities if requested
+        if (skipNonCycling && !parsed.isCycling && parsed.activityType !== 'unknown') {
+          skipped.push({
+            file: file.originalname,
+            reason: `Non-cycling activity (${parsed.activityType})`
+          });
+          continue;
+        }
 
         // Check for duplicates
         const duplicate = checkDuplicate(parsed);
@@ -165,6 +261,12 @@ router.post('/', upload.array('gpx', 50), async (req, res) => {
             reason: `Already imported as "${duplicate.title}" (${duplicate.distance_km?.toFixed(1)} km)`
           });
           continue;
+        }
+
+        // Determine bike type to use
+        let finalBikeType = bike_type;
+        if (useDetectedBikeType && parsed.detectedBikeType) {
+          finalBikeType = parsed.detectedBikeType;
         }
 
         const rideId = uuidv4();
@@ -177,7 +279,7 @@ router.post('/', upload.array('gpx', 50), async (req, res) => {
           rideId,
           parsed.name,
           parsed.date,
-          bike_type,
+          finalBikeType,
           parsed.totalDistance,
           parsed.totalElevationGain
         );
@@ -217,7 +319,9 @@ router.post('/', upload.array('gpx', 50), async (req, res) => {
           id: rideId,
           title: parsed.name,
           date: parsed.date,
-          bike_type,
+          bike_type: finalBikeType,
+          detected_bike_type: parsed.detectedBikeType,
+          activity_type: parsed.activityType,
           distance_km: parsed.totalDistance,
           elevation_gain_m: parsed.totalElevationGain,
           point_count: parsed.points.length,

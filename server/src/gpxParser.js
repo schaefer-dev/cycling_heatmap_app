@@ -5,12 +5,124 @@ const parser = new XMLParser({
   attributeNamePrefix: '@_'
 });
 
+// Activity type mappings for detection
+const CYCLING_TYPES = [
+  'cycling', 'biking', 'bike', 'ride', 'bicycle',
+  'road_biking', 'road cycling', 'road biking',
+  'mountain_biking', 'mountain biking', 'mtb', 'mountain bike',
+  'gravel_cycling', 'gravel', 'gravel biking', 'cyclocross', 'cx',
+  'indoor_cycling', 'virtual_ride', 'spinning',
+  'e-bike', 'ebike', 'electric bike'
+];
+
+const ROAD_CYCLING_TYPES = [
+  'road_biking', 'road cycling', 'road biking', 'road bike', 'road'
+];
+
+const MTB_TYPES = [
+  'mountain_biking', 'mountain biking', 'mtb', 'mountain bike', 'mountain'
+];
+
+const GRAVEL_TYPES = [
+  'gravel_cycling', 'gravel', 'gravel biking', 'cyclocross', 'cx', 'gravel/cx'
+];
+
+/**
+ * Detect activity type and bike type from GPX metadata
+ * @param {Object} gpx - Parsed GPX object
+ * @param {Object} track - Track object
+ * @param {string} filename - Original filename (optional)
+ * @returns {Object} { activityType, isCycling, detectedBikeType }
+ */
+function detectActivityType(gpx, track, filename = '') {
+  let activityType = null;
+  let isCycling = false;
+  let detectedBikeType = null;
+
+  // 1. Check track type element
+  if (track.type) {
+    activityType = String(track.type).toLowerCase().trim();
+  }
+
+  // 2. Check Garmin extensions for activity type
+  const extensions = track.extensions || gpx.extensions;
+  if (extensions) {
+    // Garmin uses various extension formats
+    const garminExt = extensions['gpxx:TrackExtension'] ||
+                      extensions['TrackExtension'] ||
+                      extensions;
+
+    if (garminExt) {
+      const displayColor = garminExt['gpxx:DisplayColor'] || garminExt['DisplayColor'];
+      // Garmin activity type in extensions
+      const actType = garminExt['gpxx:ActivityType'] ||
+                      garminExt['ActivityType'] ||
+                      garminExt['type'];
+      if (actType) {
+        activityType = String(actType).toLowerCase().trim();
+      }
+    }
+  }
+
+  // 3. Check metadata for activity type (some exporters put it here)
+  if (!activityType && gpx.metadata) {
+    if (gpx.metadata.type) {
+      activityType = String(gpx.metadata.type).toLowerCase().trim();
+    }
+    // Check keywords
+    if (gpx.metadata.keywords) {
+      const keywords = String(gpx.metadata.keywords).toLowerCase();
+      if (CYCLING_TYPES.some(t => keywords.includes(t))) {
+        activityType = activityType || keywords;
+      }
+    }
+  }
+
+  // 4. Try to detect from filename
+  if (!activityType && filename) {
+    const lowerFilename = filename.toLowerCase();
+    if (CYCLING_TYPES.some(t => lowerFilename.includes(t))) {
+      // Extract type from filename
+      for (const t of [...ROAD_CYCLING_TYPES, ...MTB_TYPES, ...GRAVEL_TYPES, ...CYCLING_TYPES]) {
+        if (lowerFilename.includes(t.replace(/_/g, ' ')) || lowerFilename.includes(t.replace(/ /g, '_'))) {
+          activityType = t;
+          break;
+        }
+      }
+    }
+  }
+
+  // 5. Determine if cycling and what type
+  if (activityType) {
+    isCycling = CYCLING_TYPES.some(t => activityType.includes(t));
+
+    if (isCycling) {
+      // Detect specific bike type
+      if (ROAD_CYCLING_TYPES.some(t => activityType.includes(t))) {
+        detectedBikeType = 'road';
+      } else if (MTB_TYPES.some(t => activityType.includes(t))) {
+        detectedBikeType = 'mtb';
+      } else if (GRAVEL_TYPES.some(t => activityType.includes(t))) {
+        detectedBikeType = 'gravel';
+      }
+      // If just "cycling" without specific type, leave detectedBikeType as null
+    }
+  }
+
+  return {
+    activityType: activityType || 'unknown',
+    isCycling,
+    detectedBikeType
+  };
+}
+
 /**
  * Parse a GPX file and extract track data
  * @param {string} gpxContent - Raw GPX XML content
+ * @param {string} filename - Original filename (optional, for type detection)
  * @returns {Object} Parsed ride data
  */
-function parseGPX(gpxContent) {
+function parseGPX(gpxContent, filename = '') {
   const parsed = parser.parse(gpxContent);
   const gpx = parsed.gpx;
 
@@ -20,6 +132,9 @@ function parseGPX(gpxContent) {
 
   const track = gpx.trk;
   const name = track.name || 'Unnamed Ride';
+
+  // Detect activity type
+  const { activityType, isCycling, detectedBikeType } = detectActivityType(gpx, track, filename);
 
   // Get all track segments
   let segments = track.trkseg;
@@ -86,7 +201,10 @@ function parseGPX(gpxContent) {
     date,
     points,
     totalDistance,
-    totalElevationGain: Math.round(totalElevationGain)
+    totalElevationGain: Math.round(totalElevationGain),
+    activityType,
+    isCycling,
+    detectedBikeType
   };
 }
 
