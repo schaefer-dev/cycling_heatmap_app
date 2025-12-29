@@ -89,6 +89,24 @@ export default function Sidebar({
   // Refs for scrolling to selected ride
   const rideRefs = useRef({});
 
+  // Search and filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [minDistance, setMinDistance] = useState('');
+  const [maxDistance, setMaxDistance] = useState('');
+
+  // Filter rides based on search query and distance range
+  const filteredRides = rides?.filter(ride => {
+    // Text search filter
+    const matchesSearch = ride.title.toLowerCase().includes(searchQuery.toLowerCase());
+
+    // Distance range filter
+    const distance = ride.distance_km || 0;
+    const matchesMinDistance = minDistance === '' || distance >= parseFloat(minDistance);
+    const matchesMaxDistance = maxDistance === '' || distance <= parseFloat(maxDistance);
+
+    return matchesSearch && matchesMinDistance && matchesMaxDistance;
+  });
+
   // Scroll to selected ride when it changes
   useEffect(() => {
     if (selectedRide && rideRefs.current[selectedRide]) {
@@ -230,11 +248,74 @@ export default function Sidebar({
       </div>
 
       {/* Rides list */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="p-2">
+      <div className="flex-1 overflow-y-auto flex flex-col">
+        <div className="p-2 space-y-2">
           <h2 className="text-sm font-semibold text-gray-600 px-2 py-1">
             Rides {rides && `(${rides.length})`}
           </h2>
+
+          {/* Search input */}
+          <div className="relative px-2">
+            <input
+              type="text"
+              placeholder="Search rides..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-8 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+            />
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-4 w-4 absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+
+          {/* Distance range filter */}
+          <div className="flex items-center gap-2 px-2">
+            <span className="text-xs text-gray-500 whitespace-nowrap">km:</span>
+            <input
+              type="number"
+              placeholder="min"
+              value={minDistance}
+              onChange={(e) => setMinDistance(e.target.value)}
+              min="0"
+              className="w-16 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+            />
+            <span className="text-xs text-gray-400">-</span>
+            <input
+              type="number"
+              placeholder="max"
+              value={maxDistance}
+              onChange={(e) => setMaxDistance(e.target.value)}
+              min="0"
+              className="w-16 px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+            />
+            {(minDistance || maxDistance) && (
+              <button
+                onClick={() => { setMinDistance(''); setMaxDistance(''); }}
+                className="text-gray-400 hover:text-gray-600 p-0.5"
+                title="Clear distance filter"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
         </div>
 
         {ridesLoading ? (
@@ -243,9 +324,19 @@ export default function Sidebar({
           <div className="p-4 text-center text-gray-500">
             No rides yet. Import some GPX files!
           </div>
+        ) : filteredRides?.length === 0 ? (
+          <div className="p-4 text-center text-gray-500 text-sm">
+            No rides match filters
+            {searchQuery && <div className="text-xs mt-1">Name: "{searchQuery}"</div>}
+            {(minDistance || maxDistance) && (
+              <div className="text-xs mt-1">
+                Distance: {minDistance || '0'} - {maxDistance || '∞'} km
+              </div>
+            )}
+          </div>
         ) : (
-          <div className="space-y-1 px-2 pb-4">
-            {rides?.map((ride) => (
+          <div className="space-y-1 px-2 pb-4 flex-1 overflow-y-auto">
+            {filteredRides?.map((ride) => (
               <RideCard
                 key={ride.id}
                 ref={(el) => { rideRefs.current[ride.id] = el; }}
