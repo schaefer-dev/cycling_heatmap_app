@@ -16,11 +16,15 @@ A personal application for archiving cycling rides and rating road/trail section
 # Install dependencies
 npm run setup
 
-# Start the application
-npm run dev
+# Start the application and open browser
+./start.sh
 ```
 
-Open http://localhost:5173
+Or manually:
+```bash
+npm run dev
+# Then open http://localhost:5173
+```
 
 ## Project Structure
 

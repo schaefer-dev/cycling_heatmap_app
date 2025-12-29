@@ -77,4 +77,10 @@ export const getStats = async () => {
   return data;
 };
 
+export const getAllTracks = async (bikeType) => {
+  const params = bikeType ? { bike_type: bikeType } : {};
+  const { data } = await api.get('/heatmap/tracks', { params });
+  return data;
+};
+
 export default api;

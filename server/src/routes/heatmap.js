@@ -77,6 +77,43 @@ router.get('/bounds', (req, res) => {
   }
 });
 
+// GET /api/heatmap/tracks - Get all simplified tracks grouped by ride
+router.get('/tracks', (req, res) => {
+  try {
+    const { bike_type } = req.query;
+
+    let ridesQuery = `SELECT id, title, bike_type FROM rides`;
+    const params = [];
+
+    if (bike_type && ['road', 'gravel', 'mtb'].includes(bike_type)) {
+      ridesQuery += ' WHERE bike_type = ?';
+      params.push(bike_type);
+    }
+
+    const rides = db.prepare(ridesQuery).all(...params);
+
+    // Get simplified points for each ride
+    const getPoints = db.prepare(`
+      SELECT lat, lng FROM track_points_simplified
+      WHERE ride_id = ?
+      ORDER BY id
+    `);
+
+    const tracks = rides.map(ride => ({
+      id: ride.id,
+      title: ride.title,
+      bike_type: ride.bike_type,
+      track: getPoints.all(ride.id).map(p => [p.lat, p.lng])
+    }));
+
+    res.json(tracks);
+
+  } catch (error) {
+    console.error('Error fetching tracks:', error);
+    res.status(500).json({ error: 'Failed to fetch tracks' });
+  }
+});
+
 // GET /api/heatmap/stats - Get statistics
 router.get('/stats', (req, res) => {
   try {

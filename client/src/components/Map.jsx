@@ -2,9 +2,10 @@ import { useEffect, useRef, useMemo, useState } from 'react';
 import { MapContainer, TileLayer, Polyline, CircleMarker, useMap, useMapEvents } from 'react-leaflet';
 import { useQuery } from '@tanstack/react-query';
 import 'leaflet/dist/leaflet.css';
-import { getHeatmapData, getMapBounds, getRide, getSections } from '../api';
+import { getHeatmapData, getMapBounds, getRide, getSections, getAllTracks } from '../api';
 import HeatmapLayer from './HeatmapLayer';
 import SectionRatingPanel from './SectionRatingPanel';
+import SectionDetailsPanel from './SectionDetailsPanel';
 
 const RATING_COLORS = {
   excellent: '#22c55e',
@@ -69,16 +70,24 @@ function findClosestPoint(clickLat, clickLng, trackPoints) {
   };
 }
 
+const BIKE_TYPE_TRACK_COLORS = {
+  road: '#3b82f6',    // blue
+  gravel: '#d97706',  // amber
+  mtb: '#16a34a'      // green
+};
+
 export default function Map({
   selectedRide,
   bikeTypeFilter,
   showHeatmap,
-  showSections
+  showSections,
+  showAllTracks
 }) {
   const mapRef = useRef(null);
   const [isSelectingSection, setIsSelectingSection] = useState(false);
   const [startPoint, setStartPoint] = useState(null);
   const [endPoint, setEndPoint] = useState(null);
+  const [selectedSection, setSelectedSection] = useState(null);
 
   // Fetch map bounds
   const { data: bounds } = useQuery({
@@ -105,6 +114,13 @@ export default function Map({
     queryKey: ['sections', bikeTypeFilter],
     queryFn: () => getSections(bikeTypeFilter ? { bike_type: bikeTypeFilter } : {}),
     enabled: showSections
+  });
+
+  // Fetch all tracks when showAllTracks is enabled
+  const { data: allTracks } = useQuery({
+    queryKey: ['allTracks', bikeTypeFilter],
+    queryFn: () => getAllTracks(bikeTypeFilter),
+    enabled: showAllTracks
   });
 
   // Convert ride track to polyline positions
@@ -176,6 +192,19 @@ export default function Map({
           <HeatmapLayer points={heatmapData} />
         )}
 
+        {/* All tracks layer */}
+        {showAllTracks && allTracks && allTracks.map(track => (
+          <Polyline
+            key={track.id}
+            positions={track.track}
+            pathOptions={{
+              color: BIKE_TYPE_TRACK_COLORS[track.bike_type] || '#888',
+              weight: 2,
+              opacity: 0.6
+            }}
+          />
+        ))}
+
         {/* Selected ride track */}
         {selectedRide && rideTrack && (
           <Polyline
@@ -230,7 +259,12 @@ export default function Map({
 
         {/* Rated sections */}
         {showSections && sections && sections.map(section => (
-          <SectionOverlay key={section.id} section={section} />
+          <SectionOverlay
+            key={section.id}
+            section={section}
+            isSelected={selectedSection?.id === section.id}
+            onClick={() => setSelectedSection(section)}
+          />
         ))}
       </MapContainer>
 
@@ -271,6 +305,14 @@ export default function Map({
           onSave={handleSaveSection}
         />
       )}
+
+      {/* Section details panel */}
+      {selectedSection && !isSelectingSection && (
+        <SectionDetailsPanel
+          section={selectedSection}
+          onClose={() => setSelectedSection(null)}
+        />
+      )}
     </>
   );
 }
@@ -302,7 +344,7 @@ function MapClickHandler({ trackPoints, startPoint, onSelectStart, onSelectEnd }
   return null;
 }
 
-function SectionOverlay({ section }) {
+function SectionOverlay({ section, isSelected, onClick }) {
   // Use the stored track segment if available, otherwise fall back to straight line
   const positions = section.track_segment || [
     [section.start_lat, section.start_lng],
@@ -314,8 +356,14 @@ function SectionOverlay({ section }) {
       positions={positions}
       pathOptions={{
         color: RATING_COLORS[section.rating] || '#888',
-        weight: 6,
-        opacity: 0.8
+        weight: isSelected ? 8 : 6,
+        opacity: isSelected ? 1 : 0.8
+      }}
+      eventHandlers={{
+        click: (e) => {
+          e.originalEvent.stopPropagation();
+          onClick();
+        }
       }}
     />
   );

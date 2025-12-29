@@ -22,7 +22,9 @@ export default function Sidebar({
   showHeatmap,
   onShowHeatmapChange,
   showSections,
-  onShowSectionsChange
+  onShowSectionsChange,
+  showAllTracks,
+  onShowAllTracksChange
 }) {
   // Fetch rides
   const { data: rides, isLoading: ridesLoading } = useQuery({
@@ -75,24 +77,35 @@ export default function Sidebar({
         </div>
 
         {/* Layer toggles */}
-        <div className="flex gap-4">
+        <div className="space-y-2">
+          <div className="flex gap-4">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={showHeatmap}
+                onChange={(e) => onShowHeatmapChange(e.target.checked)}
+                className="rounded"
+              />
+              Heatmap
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={showSections}
+                onChange={(e) => onShowSectionsChange(e.target.checked)}
+                className="rounded"
+              />
+              Sections
+            </label>
+          </div>
           <label className="flex items-center gap-2 text-sm">
             <input
               type="checkbox"
-              checked={showHeatmap}
-              onChange={(e) => onShowHeatmapChange(e.target.checked)}
+              checked={showAllTracks}
+              onChange={(e) => onShowAllTracksChange(e.target.checked)}
               className="rounded"
             />
-            Heatmap
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={showSections}
-              onChange={(e) => onShowSectionsChange(e.target.checked)}
-              className="rounded"
-            />
-            Sections
+            Show all tracks
           </label>
         </div>
       </div>

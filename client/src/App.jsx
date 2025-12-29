@@ -19,6 +19,7 @@ function App() {
   const [bikeTypeFilter, setBikeTypeFilter] = useState(null);
   const [showHeatmap, setShowHeatmap] = useState(true);
   const [showSections, setShowSections] = useState(true);
+  const [showAllTracks, setShowAllTracks] = useState(false);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -34,6 +35,8 @@ function App() {
           onShowHeatmapChange={setShowHeatmap}
           showSections={showSections}
           onShowSectionsChange={setShowSections}
+          showAllTracks={showAllTracks}
+          onShowAllTracksChange={setShowAllTracks}
         />
 
         {/* Map */}
@@ -43,6 +46,7 @@ function App() {
             bikeTypeFilter={bikeTypeFilter}
             showHeatmap={showHeatmap}
             showSections={showSections}
+            showAllTracks={showAllTracks}
             onSelectRide={setSelectedRide}
           />
         </div>
