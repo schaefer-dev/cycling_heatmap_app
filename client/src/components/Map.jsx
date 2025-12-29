@@ -28,6 +28,25 @@ function FitBounds({ bounds }) {
   return null;
 }
 
+// Component to capture map instance and provide view save/restore
+function MapViewController({ onMapReady }) {
+  const map = useMap();
+
+  useEffect(() => {
+    onMapReady({
+      getView: () => ({
+        center: map.getCenter(),
+        zoom: map.getZoom()
+      }),
+      setView: (center, zoom) => {
+        map.setView(center, zoom, { animate: true });
+      }
+    });
+  }, [map, onMapReady]);
+
+  return null;
+}
+
 // Component to fit to a specific ride
 function FitToRide({ trackPoints }) {
   const map = useMap();
@@ -139,11 +158,40 @@ export default function Map({
   onSelectRide
 }) {
   const mapRef = useRef(null);
+  const mapControllerRef = useRef(null);
   const [isSelectingSection, setIsSelectingSection] = useState(false);
   const [startPoint, setStartPoint] = useState(null);
   const [endPoint, setEndPoint] = useState(null);
   const [selectedSection, setSelectedSection] = useState(null);
   const [trackInfoPopup, setTrackInfoPopup] = useState(null); // { lat, lng, tracks: [] }
+  const [savedMapView, setSavedMapView] = useState(null); // { center, zoom } - saved when preview starts
+
+  // Callback when map controller is ready
+  const handleMapReady = useCallback((controller) => {
+    mapControllerRef.current = controller;
+  }, []);
+
+  // Handle preview ride - saves current view before selecting
+  const handlePreviewRide = useCallback((rideId) => {
+    // Save current map view before zooming to the ride
+    if (mapControllerRef.current) {
+      setSavedMapView(mapControllerRef.current.getView());
+    }
+    onSelectRide(rideId);
+    setTrackInfoPopup(null);
+  }, [onSelectRide]);
+
+  // Handle clear preview - restores saved view
+  const handleClearPreview = useCallback(() => {
+    onSelectRide(null);
+    if (savedMapView && mapControllerRef.current) {
+      // Small delay to let the ride deselection happen first
+      setTimeout(() => {
+        mapControllerRef.current.setView(savedMapView.center, savedMapView.zoom);
+        setSavedMapView(null);
+      }, 50);
+    }
+  }, [onSelectRide, savedMapView]);
 
   // Fetch map bounds
   const { data: bounds } = useQuery({
@@ -281,6 +329,9 @@ export default function Map({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
 
+        {/* Map view controller for save/restore functionality */}
+        <MapViewController onMapReady={handleMapReady} />
+
         {/* Create custom panes for proper z-index layering */}
         <MapPanes />
 
@@ -331,10 +382,7 @@ export default function Map({
             <TrackInfoContent
               tracks={trackInfoPopup.tracks}
               selectedRide={selectedRide}
-              onPreviewRide={(rideId) => {
-                onSelectRide(rideId);
-                setTrackInfoPopup(null);
-              }}
+              onPreviewRide={handlePreviewRide}
             />
           </Popup>
         )}
@@ -467,7 +515,7 @@ export default function Map({
       {/* Clear preview button - shown when a ride is selected */}
       {selectedRide && !isSelectingSection && (
         <button
-          onClick={() => onSelectRide(null)}
+          onClick={handleClearPreview}
           className="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-[1000] bg-white hover:bg-gray-50 shadow-lg px-4 py-2 rounded-lg font-medium text-gray-700 flex items-center gap-2 border border-gray-200"
         >
           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
