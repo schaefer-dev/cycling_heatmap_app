@@ -1,10 +1,29 @@
 {
-  "name": "cycling-map",
+  "name": "ridestack",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Personal cycling ride archive with heatmap, route grouping and Garmin/Hammerhead sync",
-  "license": "ISC",
+  "description": "Self-hosted cycling archive: Garmin and Hammerhead sync, automatic route grouping and a personal heatmap",
+  "license": "AGPL-3.0-only",
+  "author": "Daniel Schäfer",
+  "homepage": "https://github.com/schaefer-dev/ridestack#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/schaefer-dev/ridestack.git"
+  },
+  "bugs": "https://github.com/schaefer-dev/ridestack/issues",
+  "keywords": [
+    "cycling",
+    "heatmap",
+    "garmin",
+    "hammerhead",
+    "karoo",
+    "gpx",
+    "fit",
+    "self-hosted",
+    "raspberry-pi",
+    "leaflet"
+  ],
   "workspaces": [
     "server",
     "client"

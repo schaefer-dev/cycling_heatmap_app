@@ -36,7 +36,9 @@ const envSchema = z.object({
     .transform((v) => v === 'true'),
   GEOCODER_URL: z.url().default('https://nominatim.openstreetmap.org'),
   GEOCODER_LANGUAGE: z.string().default('de'),
-  GEOCODER_USER_AGENT: z.string().default('cycling-archive/1.0 (personal ride archive)'),
+  GEOCODER_USER_AGENT: z
+    .string()
+    .default('ridestack/1.0 (+https://github.com/schaefer-dev/ridestack)'),
 });
 
 export interface Config {
@@ -66,11 +68,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new Error(`Invalid configuration:\n${z.prettifyError(parsed.error)}`);
   }
   const e = parsed.data;
-  const dataDir = path.resolve(e.DATA_DIR);
+  // Relative paths are relative to the repository root, not to the workspace npm runs in.
+  const dataDir = path.resolve(REPO_ROOT, e.DATA_DIR);
   return {
     port: e.PORT,
     dataDir,
-    dbPath: e.DB_PATH ? path.resolve(e.DB_PATH) : path.join(dataDir, 'cycling_archive.db'),
+    dbPath: e.DB_PATH
+      ? path.resolve(REPO_ROOT, e.DB_PATH)
+      : path.join(dataDir, 'cycling_archive.db'),
     backupDir: path.join(dataDir, 'backups'),
     fitDir: path.join(dataDir, 'fit'),
     timeZone: e.TZ_NAME ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
