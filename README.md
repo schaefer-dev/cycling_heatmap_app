@@ -157,17 +157,35 @@ and which would be imported.
 
 Ridestack runs in development mode (`./start.sh` or `npm run dev`) and is light enough for a
 Raspberry Pi. The web UI listens on `localhost` by default. To open it from other devices on your
-network, start the two parts separately and expose the UI:
+network, run the variant that exposes the UI:
 
 ```bash
-npm run server                       # API on :3001
-npm run dev -w client -- --host      # UI on http://<your-pi>:5173
+npm run serve                        # API on :3001 + UI on http://<your-pi>:5173
+```
+
+To start it on boot and restart it after a crash, install the systemd unit (edit the user and
+paths in it first):
+
+```bash
+sudo cp deploy/ridestack.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now ridestack
+journalctl -u ridestack -f           # logs; after a git pull: sudo systemctl restart ridestack
 ```
 
 > [!WARNING]
 > Ridestack has **no login**. Anyone who can reach it can see and change your rides. Keep it on
 > your home network or behind a VPN/reverse proxy with authentication, and don't expose it
 > directly to the internet.
+
+**Moving data between machines.** `npm run pi:pull` copies the Pi's database, `bike-sensors.json`
+and raw FIT files to this machine; `npm run pi:push` goes the other way. Set `PI_HOST`
+(`user@host`) and optionally `PI_REPO` (default `~/dev/ridestack`) in the environment or `.env`.
+Both expect the default `data/` layout, take a consistent snapshot, back up the replaced database
+to `data/backups/`, only add FIT files and never touch `.env`. A push stops and restarts the Pi's
+`ridestack` service (`PI_SERVICE`); otherwise both refuse while the app runs on the receiving
+side. `DRY_RUN=1` only compares. Replacing a database that has rides the other side lacks needs
+`ALLOW_DROP_RIDES=1`, and since the Pi is meant to be the main copy, pushing needs
+`FORCE_OVERWRITE_PI=1`.
 
 ## Configuration
 
@@ -245,6 +263,7 @@ flowchart LR
 | `npm run routes:rebuild`                                 | Re-cluster all rides (keeps manual moves and your route names)       |
 | `npm run routes:evaluate [-- --save]`                    | Print route groups without writing; diff against a saved snapshot    |
 | `npm run bikes:classify [-- --apply]`                    | Re-derive bike types of synced rides from `data/bike-sensors.json`   |
+| `npm run pi:pull` / `pi:push`                            | Copy database, sensor rules and FIT files from / to the Pi           |
 | `npm run check`                                          | Lint + typecheck + all tests (CI runs the same)                      |
 
 Stop the server before running commands that write (`garmin:sync`, `hammerhead:sync`,

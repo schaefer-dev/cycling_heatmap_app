@@ -1,0 +1,39 @@
+# systemd unit for Ridestack (API on :3001 + web UI on :5173).
+#
+# Install on the Raspberry Pi:
+#   sudo cp deploy/ridestack.service /etc/systemd/system/
+#   # edit User / WorkingDirectory / the nvm path below to match your setup
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now ridestack
+#   journalctl -u ridestack -f        # watch logs (syncs, imports, migrations)
+#
+# The UI is reachable from other devices at http://<pi>:5173 (LAN or Tailscale address); it
+# proxies /api to the server. Ridestack has NO login: keep it on your home network or VPN.
+#
+# Runs `npm run serve`: the API without --watch (a crash ends the unit and systemd restarts it)
+# and the Vite dev server with --host. After `git pull` or `npm ci` on the Pi:
+#   sudo systemctl restart ridestack
+# Pending database migrations run on startup (with a backup in data/backups/).
+#
+# Node comes from nvm because the distro's node is too old (Ridestack needs >= 22.18). `nvm use`
+# picks the version from .nvmrc, so a Node upgrade only needs `nvm install` + a restart.
+#
+# `npm run pi:push` stops this service while it replaces the database and starts it again.
+
+[Unit]
+Description=Ridestack cycling archive (API + web UI)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=daniel
+WorkingDirectory=/home/daniel/dev/ridestack
+ExecStart=/bin/bash -c 'source /home/daniel/.nvm/nvm.sh && nvm use --silent && exec npm run serve'
+Restart=always
+RestartSec=5
+TimeoutStopSec=20
+Environment=HOME=/home/daniel
+
+[Install]
+WantedBy=multi-user.target

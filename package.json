@@ -35,6 +35,7 @@
     "dev": "concurrently -k -n server,client -c blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
     "server": "npm run dev -w server",
     "client": "npm run dev -w client",
+    "serve": "concurrently -k -n server,client -c blue,green \"npm run start -w server\" \"npm run dev -w client -- --host\"",
     "build": "npm run build -w client",
     "lint": "eslint .",
     "format": "prettier --write .",
@@ -49,7 +50,9 @@
     "bikes:classify": "npm run bikes:classify -w server --",
     "garmin:sync": "npm run garmin:sync -w server --",
     "hammerhead:sync": "npm run hammerhead:sync -w server --",
-    "hammerhead:routes": "npm run hammerhead:routes -w server --"
+    "hammerhead:routes": "npm run hammerhead:routes -w server --",
+    "pi:push": "scripts/sync_to_pi.sh",
+    "pi:pull": "scripts/sync_from_pi.sh"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
