@@ -5,6 +5,7 @@ import { heatmapRouter } from './api/heatmap.ts';
 import { ridesRouter } from './api/rides.ts';
 import { routesRouter } from './api/routes.ts';
 import { sectionsRouter } from './api/sections.ts';
+import { suggestionsRouter } from './api/suggestions.ts';
 import { syncRouter } from './api/sync.ts';
 import type { DB } from './db/connection.ts';
 import { hammerheadRouter } from './api/hammerhead.ts';
@@ -71,6 +72,7 @@ export function createApp(ctx: AppContext): express.Express {
   app.use('/api/heatmap', heatmapRouter(ctx));
   app.use('/api/sync', syncRouter(ctx));
   app.use('/api/hammerhead', hammerheadRouter(ctx, new OAuthStates()));
+  app.use('/api/suggestions', suggestionsRouter(ctx));
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Unknown API endpoint' });
   });

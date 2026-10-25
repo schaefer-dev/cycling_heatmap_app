@@ -27,7 +27,8 @@
     "routes:rebuild": "npm run routes:rebuild -w server --",
     "routes:evaluate": "npm run routes:evaluate -w server --",
     "garmin:sync": "npm run garmin:sync -w server --",
-    "hammerhead:sync": "npm run hammerhead:sync -w server --"
+    "hammerhead:sync": "npm run hammerhead:sync -w server --",
+    "hammerhead:routes": "npm run hammerhead:routes -w server --"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

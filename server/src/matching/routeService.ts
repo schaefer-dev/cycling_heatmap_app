@@ -26,6 +26,7 @@ import {
   pickTitleName,
   uniqueName,
 } from './naming.ts';
+import * as plannedRepo from './plannedRepo.ts';
 import * as routes from './routeRepo.ts';
 import { DEFAULT_MATCH_SETTINGS, findDeviations, type MatchSettings } from './similarity.ts';
 
@@ -207,6 +208,41 @@ export class RouteService {
     if (routes.isNameTaken(db, trimmed, routeId))
       throw new ConflictError('Another route already has this name');
     routes.setRouteName(db, routeId, trimmed, 'user');
+  }
+
+  // ---- planned-route suggestions (explicit user decisions only) --------------------------------
+
+  /**
+   * The user accepted a suggested planned route: the group takes its name (protected like a
+   * manual rename) and is linked to it, so its rides show the planned route.
+   */
+  acceptPlannedName(routeId: string, plannedRouteId: string, score: number | null = null): string {
+    const db = this.#db;
+    if (!routes.getRoute(db, routeId)) throw new NotFoundError('Route not found');
+    const planned = plannedRepo.getPlannedRoute(db, plannedRouteId);
+    if (!planned?.name?.trim()) throw new NotFoundError('Planned route not found');
+    return db.transaction(() => {
+      plannedRepo.saveDecision(db, routeId, plannedRouteId, 'accepted', score);
+      const name = uniqueName(planned.name!.trim(), (n) => routes.isNameTaken(db, n, routeId));
+      routes.setRouteName(db, routeId, name, 'user');
+      return name;
+    })();
+  }
+
+  /** The user rejected a suggested pair: it is never suggested again. */
+  rejectPlannedName(routeId: string, plannedRouteId: string, score: number | null = null): void {
+    const db = this.#db;
+    if (!routes.getRoute(db, routeId)) throw new NotFoundError('Route not found');
+    if (!plannedRepo.getPlannedRoute(db, plannedRouteId))
+      throw new NotFoundError('Planned route not found');
+    plannedRepo.saveDecision(db, routeId, plannedRouteId, 'rejected', score);
+  }
+
+  /** Removes an accepted planned-route label; the (user) name stays. */
+  unlinkPlannedRoute(routeId: string): void {
+    if (!plannedRepo.removeAcceptedLink(this.#db, routeId)) {
+      throw new NotFoundError('Route has no planned route');
+    }
   }
 
   // ---- deviations -----------------------------------------------------------------------------

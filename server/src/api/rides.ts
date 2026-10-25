@@ -4,6 +4,7 @@ import type { AppContext } from '../app.ts';
 import { BIKE_TYPES, type BikeType } from '../domain.ts';
 import { BadRequestError, NotFoundError } from '../errors.ts';
 import { pathLengthM } from '../geo/geo.ts';
+import { acceptedNames } from '../matching/plannedRepo.ts';
 import { listRouteRows } from '../matching/routeRepo.ts';
 import { parseFit } from '../parsers/fit.ts';
 import { parseGpx } from '../parsers/gpx.ts';
@@ -56,9 +57,11 @@ export function ridesRouter(ctx: AppContext): Router {
 
   const withRouteNames = (rows: rides.RideRow[]) => {
     const names = new Map(listRouteRows(db).map((r) => [r.id, r.name]));
+    const planned = acceptedNames(db);
     return rows.map((r) => ({
       ...r,
       route_name: r.route_id ? (names.get(r.route_id) ?? null) : null,
+      planned_route_name: r.route_id ? (planned.get(r.route_id) ?? null) : null,
     }));
   };
 

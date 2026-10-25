@@ -3,8 +3,16 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { ProviderSyncStatus, Ride, RouteDetail, RouteSummary, SyncStatus } from '../src/api';
+import type {
+  ProviderSyncStatus,
+  Ride,
+  RouteDetail,
+  RouteSummary,
+  Suggestions,
+  SyncStatus,
+} from '../src/api';
 import RoutesTab from '../src/components/sidebar/RoutesTab';
+import SuggestionsTab from '../src/components/sidebar/SuggestionsTab';
 import SyncStatusPanel from '../src/components/sidebar/SyncStatusPanel';
 import { ToastProvider } from '../src/components/Toast';
 
@@ -17,6 +25,10 @@ vi.mock('../src/api', async (importOriginal) => ({
   moveRideToRoute: vi.fn(),
   getSyncStatus: vi.fn(),
   startSync: vi.fn(),
+  getSuggestions: vi.fn(),
+  acceptSuggestion: vi.fn(),
+  rejectSuggestion: vi.fn(),
+  refreshPlannedRoutes: vi.fn(),
 }));
 const api = await import('../src/api');
 
@@ -41,6 +53,7 @@ const summary = (over: Partial<RouteSummary>): RouteSummary => ({
   avg_elevation_gain_m: 420,
   bike_types: 'gravel',
   length_m: 64000,
+  planned_route_name: null,
   ...over,
 });
 
@@ -238,5 +251,81 @@ describe('SyncStatusPanel', () => {
     expect(await screen.findByText(/Hammerhead synced/)).toBeInTheDocument();
     await userEvent.click(screen.getByText('Sync now'));
     expect(api.startSync).toHaveBeenCalledWith('hammerhead');
+  });
+});
+
+describe('SuggestionsTab', () => {
+  const suggestions: Suggestions = {
+    planned_routes: { count: 463, rated: 123, synced_at: new Date().toISOString(), error: null },
+    counts: { strong: 1, weak: 4 },
+    groups: [
+      {
+        route: {
+          id: 'r9',
+          name: 'Saarbrücken loop via Homburg · 90 km',
+          name_source: 'geo',
+          ride_count: 2,
+          distance_km: 91,
+          elevation_gain_m: 700,
+          first_ridden: '2023-05-14T08:00:00.000Z',
+          last_ridden: '2023-06-01T08:00:00.000Z',
+        },
+        candidates: [
+          {
+            planned_route_id: '1.route.a',
+            name: '6SG Biotop Beeden shortcut 90k flach',
+            distance_km: 90.7,
+            gain_m: 435,
+            created_at: '2023-05-14T07:00:00.000Z',
+            score: 0.98,
+            strength: 'strong',
+            distance_diff: 0.003,
+            lag_days: 0,
+            reasons: ['distance +0.3 %', 'ridden the same day it was planned'],
+            other_groups: 0,
+          },
+        ],
+      },
+    ],
+  };
+
+  it('lists suggestions with their reasons and only changes something on Accept', async () => {
+    vi.mocked(api.getSuggestions).mockResolvedValue(suggestions);
+    vi.mocked(api.acceptSuggestion).mockResolvedValue({ route_id: 'r9', name: '6SG Biotop' });
+    const onSelectRoute = vi.fn();
+    render(<SuggestionsTab selectedRouteId={null} onSelectRoute={onSelectRoute} />, { wrapper });
+
+    expect(await screen.findByText('6SG Biotop Beeden shortcut 90k flach')).toBeInTheDocument();
+    expect(screen.getByText(/ridden the same day it was planned/)).toBeInTheDocument();
+    expect(screen.getByText(/123 rated of 463 planned routes/)).toBeInTheDocument();
+    expect(api.acceptSuggestion).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByText('Saarbrücken loop via Homburg · 90 km'));
+    expect(onSelectRoute).toHaveBeenCalledWith('r9');
+    expect(api.acceptSuggestion).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByText('Accept'));
+    expect(api.acceptSuggestion).toHaveBeenCalledWith('r9', suggestions.groups[0]!.candidates[0]);
+    expect(api.rejectSuggestion).not.toHaveBeenCalled();
+  });
+
+  it('rejects, toggles weaker matches, and points to reconnect on a permission error', async () => {
+    vi.mocked(api.getSuggestions).mockResolvedValue({
+      ...suggestions,
+      planned_routes: {
+        ...suggestions.planned_routes,
+        error: 'Hammerhead login lacks a permission',
+      },
+    });
+    vi.mocked(api.rejectSuggestion).mockResolvedValue({});
+    render(<SuggestionsTab selectedRouteId={null} onSelectRoute={vi.fn()} />, { wrapper });
+    expect(await screen.findByText('Reconnect Hammerhead')).toHaveAttribute(
+      'href',
+      '/api/hammerhead/connect'
+    );
+    await userEvent.click(screen.getByText('Reject'));
+    expect(api.rejectSuggestion).toHaveBeenCalledWith('r9', suggestions.groups[0]!.candidates[0]);
+    await userEvent.click(screen.getByLabelText(/Show weaker matches/));
+    expect(api.getSuggestions).toHaveBeenLastCalledWith(true);
   });
 });

@@ -9,6 +9,7 @@ import { GarminSync } from '../src/garmin/sync.ts';
 import { dbTokenStore } from '../src/hammerhead/auth.ts';
 import {
   HammerheadAuthError,
+  HammerheadScopeError,
   createHammerheadClient,
   type HammerheadActivity,
   type HammerheadApi,
@@ -99,7 +100,7 @@ describe('Hammerhead client', () => {
       client_id: 'cid',
       redirect_uri: CLIENT.redirectUri,
       response_type: 'code',
-      scope: 'activity:read',
+      scope: 'activity:read route:read',
       state: 'st4te',
     });
 
@@ -192,6 +193,39 @@ describe('Hammerhead client', () => {
     await expect(none.downloadFit('x')).rejects.toThrow(/not connected/);
   });
 
+  it('lists planned routes, and reports a missing route:read permission without refreshing', async () => {
+    const tokens = memoryTokens({
+      accessToken: 'a',
+      refreshToken: 'r',
+      expiresAt: Date.now() + DAY,
+      userId: null,
+    });
+    let granted = true;
+    const { fetchFn, calls } = fakeFetch(() =>
+      granted
+        ? Response.json({
+            totalPages: 1,
+            currentPage: 1,
+            data: [
+              { id: '1000.route.x', name: 'Saarschleife 90k', createdAt: '2026-05-01T10:00:00Z' },
+            ],
+          })
+        : Response.json(
+            { reason: 'invalid_token', code: 'unauthorized', message: 'insufficient scopes' },
+            { status: 401 }
+          )
+    );
+    const client = createHammerheadClient({ ...CLIENT, tokens, fetchFn });
+    const page = await client.listRoutes(1, 100);
+    expect(page.data[0]!.name).toBe('Saarschleife 90k');
+    expect(calls[0]!.url).toBe('https://hh.test/v1/api/routes?page=1&perPage=100');
+
+    granted = false;
+    await expect(client.listRoutes(1, 100)).rejects.toThrow(HammerheadScopeError);
+    expect(calls.filter((c) => c.url.endsWith('/oauth/token'))).toHaveLength(0);
+    expect(tokens.current?.accessToken).toBe('a');
+  });
+
   it('backs off on 429/5xx and downloads the raw FIT', async () => {
     const tokens = memoryTokens({
       accessToken: 'a',
@@ -268,6 +302,9 @@ class FakeHammerhead implements HammerheadApi {
   }
   async getActivity(id: string) {
     return this.#find(id).detail;
+  }
+  async listRoutes() {
+    return { totalPages: 0, currentPage: 1, data: [] };
   }
   async downloadFit(id: string) {
     this.downloads.push(id);

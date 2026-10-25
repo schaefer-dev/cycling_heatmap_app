@@ -15,6 +15,9 @@ future route planning.
 - **Routes**: rides sharing ≥ 90 % of their path (in both directions) are grouped automatically;
   each route shows how often and when it was ridden, ride direction, and where a ride deviated
   (detours / skipped parts) from the usual way. Routes can be renamed, merged, and rides moved.
+- **Planned-route names**: your rated Hammerhead planned routes ("1S"…"6S", optional G/R) are
+  suggested as names for route groups, matched by distance and by when you rode them (the API has
+  no route geometry). The Suggestions tab lists them for review; nothing changes until you accept.
 - Heatmap, "all tracks" view, and "which rides passed here?" on click.
 - Section ratings (5 levels + surface tags).
 - GPX / FIT upload for anything not on Garmin or Hammerhead.
@@ -62,6 +65,7 @@ background. The full first sync downloads every ride once and takes a few minute
 | `npm run garmin:sync -- --backfill` | walk the full Garmin history (retries gaps) |
 | `npm run hammerhead:sync -- --dry-run` | show what a Hammerhead sync would import/link/skip |
 | `npm run hammerhead:sync -- --backfill` | walk the full Hammerhead history |
+| `npm run hammerhead:routes` | list your Hammerhead planned routes (read-only) |
 | `npm run routes:rebuild` | re-cluster all rides (keeps manual moves and your route names) |
 | `npm run routes:evaluate [-- --save]` | print route groups without writing; diff against a saved snapshot |
 

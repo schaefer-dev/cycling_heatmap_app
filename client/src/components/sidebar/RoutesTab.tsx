@@ -8,6 +8,7 @@ import {
   mergeRoutes,
   moveRideToRoute,
   renameRoute,
+  unlinkPlannedRoute,
   type BikeFilter,
   type Ride,
   type RouteSummary,
@@ -160,6 +161,9 @@ function RouteCard(props: {
             </span>
           )}
         </div>
+        {route.planned_route_name && (
+          <div className="text-xs text-blue-700 truncate">Planned: {route.planned_route_name}</div>
+        )}
         <div className="text-xs text-gray-500 mt-0.5">
           {formatKm(route.avg_distance_km, 0)} · {formatElevation(route.avg_elevation_gain_m)} ·
           last {formatRelative(route.last_ridden)}
@@ -195,6 +199,14 @@ function RouteDetails({
     mutationFn: (n: string) => renameRoute(route.id, n),
     onSuccess: () => {
       setEditing(false);
+      return onDone();
+    },
+    onError: (e) => toast.show(errorMessage(e), 'error'),
+  });
+  const unlink = useMutation({
+    mutationFn: () => unlinkPlannedRoute(route.id),
+    onSuccess: () => {
+      toast.show('Planned route label removed', 'success');
       return onDone();
     },
     onError: (e) => toast.show(errorMessage(e), 'error'),
@@ -274,6 +286,16 @@ function RouteDetails({
                 </option>
               ))}
             </select>
+            {route.planned_route_name && (
+              <button
+                onClick={() => unlink.mutate()}
+                disabled={unlink.isPending}
+                className="text-gray-500 hover:text-gray-700"
+                title={`Remove the planned route label "${route.planned_route_name}" (the name stays)`}
+              >
+                Unlink planned
+              </button>
+            )}
             <span className="ml-auto text-gray-500">since {formatDate(route.first_ridden)}</span>
           </>
         )}

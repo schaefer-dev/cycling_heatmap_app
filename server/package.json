@@ -10,7 +10,8 @@
     "routes:rebuild": "node --env-file-if-exists=../.env src/cli/routes-rebuild.ts",
     "routes:evaluate": "node --env-file-if-exists=../.env src/cli/routes-evaluate.ts",
     "garmin:sync": "node --env-file-if-exists=../.env src/cli/garmin-sync.ts",
-    "hammerhead:sync": "node --env-file-if-exists=../.env src/cli/hammerhead-sync.ts"
+    "hammerhead:sync": "node --env-file-if-exists=../.env src/cli/hammerhead-sync.ts",
+    "hammerhead:routes": "node --env-file-if-exists=../.env src/cli/hammerhead-routes.ts"
   },
   "dependencies": {
     "@garmin/fitsdk": "^21.218.0",

@@ -1,5 +1,5 @@
 /**
- * Hammerhead (Karoo) API client (read-only, scope `activity:read`).
+ * Hammerhead (Karoo) API client (read-only, scopes `activity:read route:read`).
  *
  * Auth: OAuth 2.0 authorization code flow. The user connects once in the browser; the access and
  * refresh tokens are persisted through `TokenStore` and refreshed automatically (the refresh token
@@ -12,7 +12,8 @@ import { logger } from '../logger.ts';
 
 export const DEFAULT_HAMMERHEAD_AUTH_URL = 'https://api.hammerhead.io/v1/auth';
 export const DEFAULT_HAMMERHEAD_API_URL = 'https://api.hammerhead.io/v1/api';
-export const HAMMERHEAD_SCOPE = 'activity:read';
+/** Space separated; users may grant only some of them on the consent page. */
+export const HAMMERHEAD_SCOPE = 'activity:read route:read';
 export const MAX_PAGE_SIZE = 100;
 
 export interface HammerheadActivitySummary {
@@ -30,10 +31,20 @@ export interface HammerheadActivity extends HammerheadActivitySummary {
   updatedAt?: string;
 }
 
-export interface HammerheadPage {
+/** A planned route in the user's Hammerhead library (made there or synced from e.g. Komoot). */
+export interface HammerheadRouteSummary {
+  /** e.g. "1000.route.abcd" */
+  id: string;
+  name: string | null;
+  createdAt: string;
+  distance?: number;
+  gain?: number;
+}
+
+export interface HammerheadPage<T = HammerheadActivitySummary> {
   totalPages: number;
   currentPage: number;
-  data: HammerheadActivitySummary[];
+  data: T[];
 }
 
 export interface StoredTokens {
@@ -55,6 +66,13 @@ export interface HammerheadApi {
   getActivity(id: string): Promise<HammerheadActivity>;
   /** The original FIT file. */
   downloadFit(id: string): Promise<Uint8Array>;
+  /** Needs the `route:read` scope (HammerheadScopeError otherwise). */
+  listRoutes(page: number, perPage: number): Promise<HammerheadPage<HammerheadRouteSummary>>;
+}
+
+/** Unchecked GET for exploring undocumented endpoints (CLI only); never throws on HTTP errors. */
+export interface HammerheadProbe {
+  rawGet(path: string): Promise<{ status: number; contentType: string | null; body: Uint8Array }>;
 }
 
 export interface HammerheadOAuth {
@@ -67,6 +85,12 @@ export interface HammerheadOAuth {
 
 /** Not connected, or the connection was revoked/expired. The user has to (re)connect. */
 export class HammerheadAuthError extends Error {}
+
+/**
+ * The login works but lacks a permission (e.g. `route:read` for planned routes, when the account
+ * was connected before that scope was requested, or the user unticked it). Fixed by reconnecting.
+ */
+export class HammerheadScopeError extends Error {}
 
 export class HammerheadHttpError extends Error {
   readonly status: number;
@@ -99,7 +123,7 @@ interface TokenResponse {
 
 export function createHammerheadClient(
   opts: HammerheadClientOptions
-): HammerheadApi & HammerheadOAuth {
+): HammerheadApi & HammerheadOAuth & HammerheadProbe {
   const authUrl = opts.authUrl ?? DEFAULT_HAMMERHEAD_AUTH_URL;
   const apiUrl = opts.apiUrl ?? DEFAULT_HAMMERHEAD_API_URL;
   const fetchFn = opts.fetchFn ?? fetch;
@@ -218,6 +242,15 @@ export function createHammerheadClient(
           ...(accept ? { Accept: accept } : {}),
         },
       });
+      if (res.status === 401 || res.status === 403) {
+        // Hammerhead answers a missing scope with 401 too; refreshing would not help.
+        const body = await res.text().catch(() => '');
+        if (/insufficient scope/i.test(body)) {
+          throw new HammerheadScopeError(
+            `Hammerhead login lacks a permission for ${path.split('?')[0]}: connect Hammerhead again and allow it`
+          );
+        }
+      }
       if (res.status === 401 && attempt === 0) continue; // token revoked/expired early: refresh
       if (res.status === 401 || res.status === 403) {
         throw new HammerheadAuthError(
@@ -286,6 +319,21 @@ export function createHammerheadClient(
         'application/vnd.ant.fit'
       );
       return new Uint8Array(await res.arrayBuffer());
+    },
+    async listRoutes(page, perPage) {
+      const qs = new URLSearchParams({ page: String(page), perPage: String(perPage) });
+      const res = await authorizedGet(`/routes?${qs}`);
+      return (await res.json()) as HammerheadPage<HammerheadRouteSummary>;
+    },
+    async rawGet(path) {
+      const res = await withRetry(`${apiUrl}${path}`, {
+        headers: { Authorization: `Bearer ${await accessToken(false)}` },
+      });
+      return {
+        status: res.status,
+        contentType: res.headers.get('content-type'),
+        body: new Uint8Array(await res.arrayBuffer()),
+      };
     },
   };
 }

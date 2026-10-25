@@ -1,10 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import type { Selection, SidebarTab, ViewSettings } from '../App';
-import { getStats, type BikeFilter } from '../api';
+import { getStats, getSuggestions, type BikeFilter } from '../api';
 import { qk } from '../queryKeys';
 import LayerControls from './sidebar/LayerControls';
 import RidesTab from './sidebar/RidesTab';
 import RoutesTab from './sidebar/RoutesTab';
+import SuggestionsTab from './sidebar/SuggestionsTab';
 import SyncStatusPanel from './sidebar/SyncStatusPanel';
 
 interface Props {
@@ -23,6 +24,16 @@ interface Props {
 
 export default function Sidebar(props: Props) {
   const { data: stats } = useQuery({ queryKey: qk.stats(), queryFn: getStats });
+  // Same query the Suggestions tab uses by default, so the badge and the list agree.
+  const { data: suggestions } = useQuery({
+    queryKey: qk.suggestions(false),
+    queryFn: () => getSuggestions(false),
+  });
+  const badge: Record<SidebarTab, number | undefined> = {
+    routes: stats?.routes.total,
+    rides: stats?.rides.total,
+    suggestions: suggestions?.counts.strong,
+  };
 
   return (
     <div className="w-96 bg-white shadow-lg flex flex-col h-full min-h-0">
@@ -63,7 +74,7 @@ export default function Sidebar(props: Props) {
       </div>
 
       <div className="flex border-b text-sm" role="tablist">
-        {(['routes', 'rides'] as const).map((t) => (
+        {(['routes', 'rides', 'suggestions'] as const).map((t) => (
           <button
             key={t}
             role="tab"
@@ -76,10 +87,8 @@ export default function Sidebar(props: Props) {
             }`}
           >
             {t}
-            {stats && (
-              <span className="ml-1 text-xs text-gray-400">
-                {t === 'routes' ? stats.routes.total : stats.rides.total}
-              </span>
+            {badge[t] !== undefined && (
+              <span className="ml-1 text-xs text-gray-400">{badge[t]}</span>
             )}
           </button>
         ))}
@@ -92,6 +101,11 @@ export default function Sidebar(props: Props) {
             selection={props.selection}
             onSelectRoute={props.onSelectRoute}
             onSelectRide={props.onSelectRide}
+          />
+        ) : props.tab === 'suggestions' ? (
+          <SuggestionsTab
+            selectedRouteId={props.selection.routeId}
+            onSelectRoute={props.onSelectRoute}
           />
         ) : (
           <RidesTab

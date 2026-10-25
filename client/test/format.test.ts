@@ -58,6 +58,7 @@ const route = (over: Partial<RouteSummary>): RouteSummary => ({
   avg_elevation_gain_m: null,
   bike_types: null,
   length_m: null,
+  planned_route_name: null,
   ...over,
 });
 

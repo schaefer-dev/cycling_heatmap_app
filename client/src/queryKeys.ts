@@ -15,6 +15,7 @@ export const qk = {
   allTracks: (bike: BikeFilter) => ['allTracks', bike] as const,
   stats: () => ['stats'] as const,
   syncStatus: () => ['syncStatus'] as const,
+  suggestions: (includeWeak: boolean) => ['suggestions', includeWeak] as const,
 };
 
 /** After rides were added, changed or removed: everything derived from rides is stale. */
@@ -31,6 +32,7 @@ export function invalidateRideData(queryClient: QueryClient): Promise<void> {
     'bounds',
     'allTracks',
     'stats',
+    'suggestions',
   ];
   return Promise.all(prefixes.map((p) => queryClient.invalidateQueries({ queryKey: [p] }))).then(
     () => undefined
@@ -48,6 +50,7 @@ export function invalidateRouteData(queryClient: QueryClient): Promise<void> {
     'routeTracks',
     'allTracks',
     'stats',
+    'suggestions',
   ];
   return Promise.all(prefixes.map((p) => queryClient.invalidateQueries({ queryKey: [p] }))).then(
     () => undefined

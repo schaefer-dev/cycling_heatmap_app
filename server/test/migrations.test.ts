@@ -101,7 +101,7 @@ describe('migrations', () => {
     expect(ensureDerivedData(db, routes)).toEqual({ geometry: 0, routed: 0 });
   });
 
-  it('adds Hammerhead tables to a v2 database, keeping existing sync runs as Garmin runs', async () => {
+  it('adds Hammerhead + planned-route tables to a v2 database, keeping sync runs as Garmin runs', async () => {
     const db = openDatabase(':memory:');
     await migrate(db, { list: migrations.filter((m) => m.version <= 2) });
     db.prepare(
@@ -113,7 +113,12 @@ describe('migrations', () => {
       (c) => c.name
     );
     expect(rideCols).toContain('hammerhead_activity_id');
-    for (const table of ['hammerhead_activities', 'hammerhead_auth']) {
+    for (const table of [
+      'hammerhead_activities',
+      'hammerhead_auth',
+      'planned_routes',
+      'planned_route_links',
+    ]) {
       expect(
         db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`).get(table)
       ).toBeDefined();

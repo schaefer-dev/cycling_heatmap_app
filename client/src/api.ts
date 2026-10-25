@@ -24,6 +24,8 @@ export interface Ride {
   hammerhead_activity_id: string | null;
   route_id: string | null;
   route_name?: string | null;
+  /** Planned Hammerhead route the user accepted for this ride's route group. */
+  planned_route_name?: string | null;
   route_similarity: number | null;
   route_direction: 'forward' | 'reverse' | null;
   route_assignment: 'auto' | 'manual' | null;
@@ -68,6 +70,7 @@ export interface RouteSummary {
   avg_elevation_gain_m: number | null;
   bike_types: string | null;
   length_m: number | null;
+  planned_route_name: string | null;
 }
 
 export interface RouteDetail extends RouteSummary {
@@ -310,3 +313,67 @@ export const startSync = async (
 
 /** Browser navigation target that starts the Hammerhead OAuth flow. */
 export const HAMMERHEAD_CONNECT_URL = '/api/hammerhead/connect';
+
+// ---- planned-route suggestions ------------------------------------------------------------------
+
+export interface SuggestionCandidate {
+  planned_route_id: string;
+  name: string;
+  distance_km: number;
+  gain_m: number | null;
+  created_at: string | null;
+  score: number;
+  strength: 'strong' | 'weak';
+  distance_diff: number;
+  lag_days: number | null;
+  reasons: string[];
+  other_groups: number;
+}
+
+export interface SuggestionGroup {
+  route: {
+    id: string;
+    name: string | null;
+    name_source: string | null;
+    ride_count: number;
+    distance_km: number;
+    elevation_gain_m: number | null;
+    first_ridden: string | null;
+    last_ridden: string | null;
+  };
+  candidates: SuggestionCandidate[];
+}
+
+export interface Suggestions {
+  /** `rated`: planned routes named "1S"…"6S" (only those are suggested). */
+  planned_routes: { count: number; rated: number; synced_at: string | null; error: string | null };
+  counts: { strong: number; weak: number };
+  groups: SuggestionGroup[];
+}
+
+export const getSuggestions = async (includeWeak: boolean) =>
+  (await http.get<Suggestions>('/suggestions', { params: { include_weak: includeWeak } })).data;
+
+export const refreshPlannedRoutes = async () =>
+  (await http.post<{ total: number; added: number; deleted: number }>('/suggestions/refresh')).data;
+
+export const acceptSuggestion = async (routeId: string, c: SuggestionCandidate) =>
+  (
+    await http.post<{ route_id: string; name: string }>('/suggestions/accept', {
+      route_id: routeId,
+      planned_route_id: c.planned_route_id,
+      score: c.score,
+    })
+  ).data;
+
+export const rejectSuggestion = async (routeId: string, c: SuggestionCandidate) =>
+  (
+    await http.post('/suggestions/reject', {
+      route_id: routeId,
+      planned_route_id: c.planned_route_id,
+      score: c.score,
+    })
+  ).data;
+
+export const unlinkPlannedRoute = async (routeId: string) =>
+  (await http.delete(`/suggestions/links/${routeId}`)).data;

@@ -31,6 +31,7 @@ import {
   type SyncSummary,
 } from '../sync/runs.ts';
 import { decideHammerheadType, hammerheadTypeKey } from './activityTypes.ts';
+import { syncPlannedRoutes } from './plannedRoutes.ts';
 import {
   HammerheadAuthError,
   MAX_PAGE_SIZE,
@@ -83,6 +84,11 @@ export class HammerheadSync {
     return e instanceof HammerheadAuthError;
   }
 
+  /** Mirrors the planned-route library (names for suggestions); see plannedRoutes.ts. */
+  refreshPlannedRoutes() {
+    return syncPlannedRoutes(this.#deps.db, this.#deps.api);
+  }
+
   /** Starts a run; rejects with ConflictError if one is already in progress. */
   run(opts: { mode?: SyncMode; dryRun?: boolean } = {}): Promise<SyncSummary> {
     if (this.#running)
@@ -125,6 +131,13 @@ export class HammerheadSync {
       await routes
         .nameRoutes()
         .catch((e: Error) => logger.warn(`Route naming failed: ${e.message}`));
+    }
+    // The planned-route library only feeds the suggestion list; its errors (e.g. a login without
+    // the route:read permission) are recorded but never fail the ride sync.
+    if (!dryRun) {
+      await this.refreshPlannedRoutes().catch((e: Error) =>
+        logger.warn(`Planned routes not synced: ${e.message}`)
+      );
     }
     logger.info(
       `Hammerhead sync finished: ${summary.imported} imported, ${summary.linked} linked, ${summary.skipped} skipped, ${summary.failed} failed`

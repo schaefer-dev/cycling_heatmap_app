@@ -200,6 +200,9 @@ function RideCard({
               {ride.title ?? 'Untitled ride'}
             </div>
           )}
+          {ride.planned_route_name && (
+            <div className="text-xs text-blue-700 truncate">Planned: {ride.planned_route_name}</div>
+          )}
           <div className="text-xs text-gray-500">
             {formatDate(ride.date, { weekday: true })} {formatTime(ride.start_time)}
           </div>

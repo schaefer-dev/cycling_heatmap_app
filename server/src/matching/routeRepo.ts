@@ -21,6 +21,8 @@ export interface RouteSummary extends RouteRow {
   avg_elevation_gain_m: number | null;
   bike_types: string | null;
   length_m: number | null;
+  /** Name of the planned route the user accepted for this group. */
+  planned_route_name: string | null;
 }
 
 export function createRoute(db: DB, id: string, referenceRideId: string): void {
@@ -42,7 +44,9 @@ const SUMMARY_SQL = `
     AVG(r.distance_km) AS avg_distance_km,
     AVG(r.elevation_gain_m) AS avg_elevation_gain_m,
     GROUP_CONCAT(DISTINCT r.bike_type) AS bike_types,
-    g.length_m AS length_m
+    g.length_m AS length_m,
+    (SELECT p.name FROM planned_route_links l JOIN planned_routes p ON p.id = l.planned_route_id
+     WHERE l.route_id = rt.id AND l.decision = 'accepted') AS planned_route_name
   FROM routes rt
   JOIN rides r ON r.route_id = rt.id
   LEFT JOIN ride_geometry g ON g.ride_id = rt.reference_ride_id`;
