@@ -3,3 +3,4 @@ client/dist
 data
 package-lock.json
 *.md
+server/src/demo/routes.json
