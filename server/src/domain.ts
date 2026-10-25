@@ -3,6 +3,10 @@
 export const BIKE_TYPES = ['road', 'gravel', 'mtb'] as const;
 export type BikeType = (typeof BIKE_TYPES)[number];
 
+/** Platforms rides are synced from. */
+export const PROVIDERS = ['garmin', 'hammerhead'] as const;
+export type Provider = (typeof PROVIDERS)[number];
+
 export const RATINGS = ['excellent', 'good', 'challenging', 'hard', 'unridable'] as const;
 export type Rating = (typeof RATINGS)[number];
 

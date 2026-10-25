@@ -3,7 +3,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Ride, RouteDetail, RouteSummary, SyncStatus } from '../src/api';
+import type { ProviderSyncStatus, Ride, RouteDetail, RouteSummary, SyncStatus } from '../src/api';
 import RoutesTab from '../src/components/sidebar/RoutesTab';
 import SyncStatusPanel from '../src/components/sidebar/SyncStatusPanel';
 import { ToastProvider } from '../src/components/Toast';
@@ -16,7 +16,7 @@ vi.mock('../src/api', async (importOriginal) => ({
   mergeRoutes: vi.fn(),
   moveRideToRoute: vi.fn(),
   getSyncStatus: vi.fn(),
-  startGarminSync: vi.fn(),
+  startSync: vi.fn(),
 }));
 const api = await import('../src/api');
 
@@ -59,6 +59,7 @@ const ride = (over: Partial<Ride>): Ride => ({
   source: 'garmin',
   activity_type: 'gravel_cycling',
   garmin_activity_id: 1,
+  hammerhead_activity_id: null,
   route_id: 'r1',
   route_similarity: 1,
   route_direction: 'forward',
@@ -148,7 +149,7 @@ describe('RoutesTab', () => {
 });
 
 describe('SyncStatusPanel', () => {
-  const status = (over: Partial<SyncStatus>): SyncStatus => ({
+  const provider = (over: Partial<ProviderSyncStatus> = {}): ProviderSyncStatus => ({
     configured: true,
     running: false,
     next_run_at: null,
@@ -158,41 +159,84 @@ describe('SyncStatusPanel', () => {
     activities: {},
     ...over,
   });
+  const status = (
+    garmin: Partial<ProviderSyncStatus> = {},
+    hammerhead: Partial<SyncStatus['hammerhead']> = {}
+  ): SyncStatus => ({
+    garmin: provider(garmin),
+    hammerhead: { ...provider(), connected: true, connected_at: null, ...hammerhead },
+  });
+  const errorRun = (error: string) => ({
+    id: 1,
+    started_at: '',
+    finished_at: '',
+    mode: 'incremental' as const,
+    status: 'error' as const,
+    imported: 0,
+    linked: 0,
+    skipped: 0,
+    failed: 0,
+    error,
+  });
 
-  it('explains how to enable sync when no API key is set', async () => {
-    vi.mocked(api.getSyncStatus).mockResolvedValue(status({ configured: false }));
+  it('explains how to enable sync when no credentials are set', async () => {
+    vi.mocked(api.getSyncStatus).mockResolvedValue(
+      status({ configured: false }, { configured: false })
+    );
     render(<SyncStatusPanel />, { wrapper });
     expect(await screen.findByText(/Garmin sync off/)).toBeInTheDocument();
+    expect(screen.getByText(/Hammerhead sync off/)).toBeInTheDocument();
   });
 
   it('shows failures (e.g. an expired key) and offers Sync now', async () => {
     vi.mocked(api.getSyncStatus).mockResolvedValue(
-      status({
-        last_run: {
-          id: 1,
-          started_at: '',
-          finished_at: '',
-          mode: 'incremental',
-          status: 'error',
-          imported: 0,
-          linked: 0,
-          skipped: 0,
-          failed: 0,
-          error: 'Garmin rejected the API key',
-        },
-      })
+      status({ last_run: errorRun('Garmin rejected the API key') }, { configured: false })
     );
-    vi.mocked(api.startGarminSync).mockResolvedValue({ started: true });
+    vi.mocked(api.startSync).mockResolvedValue({ started: true });
     render(<SyncStatusPanel />, { wrapper });
     expect(await screen.findByText(/Garmin rejected the API key/)).toBeInTheDocument();
     await userEvent.click(screen.getByText('Sync now'));
-    expect(api.startGarminSync).toHaveBeenCalled();
+    expect(api.startSync).toHaveBeenCalledWith('garmin');
   });
 
   it('disables Sync now while a sync runs', async () => {
-    vi.mocked(api.getSyncStatus).mockResolvedValue(status({ running: true }));
+    vi.mocked(api.getSyncStatus).mockResolvedValue(
+      status({ running: true }, { configured: false })
+    );
     render(<SyncStatusPanel />, { wrapper });
     expect(await screen.findByText(/Syncing with Garmin/)).toBeInTheDocument();
     expect(screen.getByText('Sync now')).toBeDisabled();
+  });
+
+  it('offers to connect Hammerhead, and to reconnect when the login expired', async () => {
+    vi.mocked(api.getSyncStatus).mockResolvedValue(
+      status({ configured: false }, { connected: false })
+    );
+    const { unmount } = render(<SyncStatusPanel />, { wrapper });
+    expect(await screen.findByText('Connect Hammerhead')).toHaveAttribute(
+      'href',
+      '/api/hammerhead/connect'
+    );
+    unmount();
+
+    vi.mocked(api.getSyncStatus).mockResolvedValue(
+      status(
+        { configured: false },
+        { last_run: errorRun('Hammerhead rejected the stored login: connect Hammerhead again') }
+      )
+    );
+    render(<SyncStatusPanel />, { wrapper });
+    expect(await screen.findByText('Reconnect')).toBeInTheDocument();
+  });
+
+  it('syncs Hammerhead on its own button', async () => {
+    vi.mocked(api.getSyncStatus).mockResolvedValue(
+      status({ configured: false }, { last_success_at: new Date().toISOString() })
+    );
+    vi.mocked(api.startSync).mockResolvedValue({ started: true });
+    render(<SyncStatusPanel />, { wrapper });
+    expect(await screen.findByText(/Hammerhead synced/)).toBeInTheDocument();
+    await userEvent.click(screen.getByText('Sync now'));
+    expect(api.startSync).toHaveBeenCalledWith('hammerhead');
   });
 });

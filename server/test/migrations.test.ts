@@ -101,6 +101,25 @@ describe('migrations', () => {
     expect(ensureDerivedData(db, routes)).toEqual({ geometry: 0, routed: 0 });
   });
 
+  it('adds Hammerhead tables to a v2 database, keeping existing sync runs as Garmin runs', async () => {
+    const db = openDatabase(':memory:');
+    await migrate(db, { list: migrations.filter((m) => m.version <= 2) });
+    db.prepare(
+      `INSERT INTO sync_runs (started_at, mode, status) VALUES ('2026-10-24T10:00:00Z', 'incremental', 'success')`
+    ).run();
+    await migrate(db);
+    expect(db.prepare(`SELECT provider FROM sync_runs`).all()).toEqual([{ provider: 'garmin' }]);
+    const rideCols = (db.prepare(`PRAGMA table_info(rides)`).all() as Array<{ name: string }>).map(
+      (c) => c.name
+    );
+    expect(rideCols).toContain('hammerhead_activity_id');
+    for (const table of ['hammerhead_activities', 'hammerhead_auth']) {
+      expect(
+        db.prepare(`SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`).get(table)
+      ).toBeDefined();
+    }
+  });
+
   it('is a no-op when everything is applied, and works on a fresh database', async () => {
     const db = openDatabase(':memory:');
     expect(await migrate(db)).toEqual(migrations.map((m) => m.version));

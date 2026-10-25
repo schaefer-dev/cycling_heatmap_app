@@ -20,6 +20,14 @@ import { extractFitFromZip, parseFit } from '../parsers/fit.ts';
 import type { ParsedActivity } from '../parsers/parsedActivity.ts';
 import type { RideImporter } from '../rides/importService.ts';
 import * as rides from '../rides/repo.ts';
+import {
+  MAX_ATTEMPTS,
+  finishRun,
+  newSummary,
+  startRun,
+  type SyncMode,
+  type SyncSummary,
+} from '../sync/runs.ts';
 import { decideGarminType } from './activityTypes.ts';
 import {
   GarminAuthError,
@@ -28,30 +36,9 @@ import {
   type GarminApi,
 } from './client.ts';
 
-export type SyncMode = 'incremental' | 'backfill';
-
 export const PAGE_SIZE = 50;
-export const MAX_ATTEMPTS = 3;
 /** Window for recognising an existing (GPX-imported) ride as the same Garmin activity. */
 export const LINK_TOLERANCE_S = 120;
-
-export interface SyncSummary {
-  runId: number | null;
-  mode: SyncMode;
-  dryRun: boolean;
-  imported: number;
-  linked: number;
-  skipped: number;
-  failed: number;
-  /** Only filled for dry runs. */
-  plan: Array<{
-    activityId: number;
-    name: string | null;
-    start: string;
-    action: string;
-    detail?: string;
-  }>;
-}
 
 interface ActivityState {
   status: 'imported' | 'linked' | 'skipped' | 'failed';
@@ -68,6 +55,7 @@ export interface GarminSyncDeps {
 }
 
 export class GarminSync {
+  readonly name = 'Garmin';
   #deps: GarminSyncDeps;
   #running: Promise<SyncSummary> | null = null;
 
@@ -77,6 +65,10 @@ export class GarminSync {
 
   get isRunning(): boolean {
     return this.#running !== null;
+  }
+
+  isAuthError(e: unknown): boolean {
+    return e instanceof GarminAuthError;
   }
 
   /** Starts a run; rejects with ConflictError if one is already in progress. */
@@ -91,24 +83,8 @@ export class GarminSync {
 
   async #run(mode: SyncMode, dryRun: boolean): Promise<SyncSummary> {
     const { db, api, routes } = this.#deps;
-    const summary: SyncSummary = {
-      runId: null,
-      mode,
-      dryRun,
-      imported: 0,
-      linked: 0,
-      skipped: 0,
-      failed: 0,
-      plan: [],
-    };
-    if (!dryRun) {
-      summary.runId = Number(
-        stmt(db, `INSERT INTO sync_runs (started_at, mode, status) VALUES (?, ?, 'running')`).run(
-          new Date().toISOString(),
-          mode
-        ).lastInsertRowid
-      );
-    }
+    const summary = newSummary(mode, dryRun);
+    startRun(db, 'garmin', summary);
     logger.info(`Garmin sync started (${mode}${dryRun ? ', dry run' : ''})`);
 
     try {
@@ -123,9 +99,9 @@ export class GarminSync {
         if (page.length < PAGE_SIZE) break;
         if (mode === 'incremental' && !sawNew) break;
       }
-      this.#finish(summary, null);
+      finishRun(db, summary, null);
     } catch (e) {
-      this.#finish(summary, e as Error);
+      finishRun(db, summary, e as Error);
       throw e;
     }
 
@@ -210,14 +186,13 @@ export class GarminSync {
           else this.#record(a, 'skipped', reason, null);
           return;
         }
-        summary.linked++;
         if (dryRun) {
+          summary.linked++;
           plan('link', `existing ride "${existing.title ?? existing.id}"`);
           return;
         }
         const parsed = await this.#download(a.activityId);
-        this.#link(existing, a, decision.bikeType, parsed);
-        this.#record(a, 'linked', null, existing.id);
+        this.#link(existing, a, decision.bikeType, parsed, summary);
         return;
       }
 
@@ -240,9 +215,7 @@ export class GarminSync {
         activityType: a.activityType.typeKey,
       });
       if (result.status === 'duplicate') {
-        this.#link(result.existing, a, decision.bikeType, parsed);
-        summary.linked++;
-        this.#record(a, 'linked', null, result.existing.id);
+        this.#link(result.existing, a, decision.bikeType, parsed, summary);
       } else {
         summary.imported++;
         this.#record(a, 'imported', null, result.ride.id);
@@ -269,71 +242,29 @@ export class GarminSync {
     ride: rides.RideRow,
     a: GarminActivitySummary,
     bikeType: rides.RideRow['bike_type'],
-    parsed: ParsedActivity
+    parsed: ParsedActivity,
+    summary: SyncSummary
   ): void {
-    const db = this.#deps.db;
-    db.transaction(() => {
-      stmt(
-        db,
-        `UPDATE rides SET garmin_activity_id = ?, activity_type = COALESCE(activity_type, ?),
-           duration_s = COALESCE(duration_s, ?), moving_time_s = COALESCE(moving_time_s, ?),
-           bike_type = COALESCE(bike_type, ?),
-           bike_type_source = CASE WHEN bike_type IS NULL AND ? IS NOT NULL THEN 'auto' ELSE bike_type_source END
-         WHERE id = ?`
-      ).run(
-        a.activityId,
-        a.activityType.typeKey,
-        parsed.durationS ?? a.elapsedDuration ?? null,
-        parsed.movingTimeS ?? a.movingDuration ?? null,
-        bikeType,
-        bikeType,
-        ride.id
+    const result = this.#deps.importer.linkExternal(ride, {
+      provider: 'garmin',
+      externalId: a.activityId,
+      activityType: a.activityType.typeKey,
+      bikeType,
+      durationS: parsed.durationS ?? a.elapsedDuration ?? null,
+      movingTimeS: parsed.movingTimeS ?? a.movingDuration ?? null,
+      devices: parsed.devices,
+    });
+    if (result.status === 'conflict') {
+      summary.skipped++;
+      this.#record(
+        a,
+        'skipped',
+        `covered by ride "${ride.title ?? ride.id}" (Garmin activity ${result.otherId})`,
+        null
       );
-      if (parsed.devices?.length) rides.saveDevices(db, ride.id, parsed.devices);
-    })();
+    } else {
+      summary.linked++;
+      this.#record(a, 'linked', null, ride.id);
+    }
   }
-
-  #finish(summary: SyncSummary, error: Error | null): void {
-    if (summary.runId === null) return;
-    stmt(
-      this.#deps.db,
-      `UPDATE sync_runs SET finished_at = ?, status = ?, imported = ?, linked = ?, skipped = ?, failed = ?, error = ?
-       WHERE id = ?`
-    ).run(
-      new Date().toISOString(),
-      error ? 'error' : 'success',
-      summary.imported,
-      summary.linked,
-      summary.skipped,
-      summary.failed,
-      error?.message ?? null,
-      summary.runId
-    );
-  }
-}
-
-export interface SyncRunRow {
-  id: number;
-  started_at: string;
-  finished_at: string | null;
-  mode: SyncMode;
-  status: 'running' | 'success' | 'error';
-  imported: number;
-  linked: number;
-  skipped: number;
-  failed: number;
-  error: string | null;
-}
-
-export function lastSyncRuns(db: DB, limit = 5): SyncRunRow[] {
-  return stmt(db, `SELECT * FROM sync_runs ORDER BY id DESC LIMIT ?`).all(limit) as SyncRunRow[];
-}
-
-/** Marks runs left in 'running' by a crash/restart as failed. */
-export function closeStaleRuns(db: DB): void {
-  stmt(
-    db,
-    `UPDATE sync_runs SET status = 'error', error = 'interrupted (server restarted)', finished_at = ?
-     WHERE status = 'running'`
-  ).run(new Date().toISOString());
 }

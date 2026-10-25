@@ -102,8 +102,8 @@ export default function ImportModal({ onClose }: { onClose(): void }) {
 
         <div className="p-4 space-y-4 overflow-y-auto flex-1">
           <p className="text-xs text-gray-500">
-            Rides recorded on Garmin arrive automatically via the Garmin sync. Use this for other
-            sources or old exports.
+            Rides on Garmin Connect and Hammerhead arrive automatically via the sync. Use this for
+            other sources or old exports.
           </p>
           <div
             onDragOver={(e) => {

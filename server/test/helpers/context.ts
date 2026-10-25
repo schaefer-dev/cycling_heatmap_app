@@ -24,7 +24,9 @@ export async function testContext(overrides: Partial<AppContext> = {}): Promise<
     routes,
     importer: overrides.importer ?? new RideImporter(db, routes, 'Europe/Berlin'),
     garminSync: null,
-    scheduler: null,
+    hammerheadSync: null,
+    hammerheadAuth: null,
+    schedulers: { garmin: null, hammerhead: null },
     nameRoutesInBackground: () => void routes.nameRoutes(),
     ...overrides,
   };

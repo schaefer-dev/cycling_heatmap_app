@@ -84,11 +84,12 @@ export function ridesRouter(ctx: AppContext): Router {
       try {
         const parsed = parseUpload(file);
         const start = parsed.points.find((p) => p.time !== null)?.time ?? null;
-        const duplicate =
-          ctx.importer.findDuplicate(parsed) ??
-          (start !== null && seenStarts.has(start)
+        const existing = ctx.importer.findDuplicate(parsed)?.ride;
+        const duplicate = existing
+          ? { title: existing.title }
+          : start !== null && seenStarts.has(start)
             ? { title: '(another file in this upload)' }
-            : undefined);
+            : undefined;
         if (start !== null) seenStarts.add(start);
         previews.push({
           filename: file.originalname,

@@ -8,12 +8,16 @@ import {
   type GarminActivitySummary,
   type GarminApi,
 } from '../src/garmin/client.ts';
-import { GarminSync, lastSyncRuns } from '../src/garmin/sync.ts';
+import { GarminSync } from '../src/garmin/sync.ts';
+import { lastSyncRuns as lastRuns } from '../src/sync/runs.ts';
 import { listDevices, listRides } from '../src/rides/repo.ts';
 import { buildFit, zipFit } from './helpers/fit.ts';
 import { testContext } from './helpers/context.ts';
 import { LOOP, LOOP_PARTIAL, ride, toGpx, type XY } from './helpers/tracks.ts';
 import { parseGpx } from '../src/parsers/gpx.ts';
+import type { DB } from '../src/db/connection.ts';
+
+const lastSyncRuns = (db: DB) => lastRuns(db, 'garmin');
 
 // ---- client ---------------------------------------------------------------------------------
 

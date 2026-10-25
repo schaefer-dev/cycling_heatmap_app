@@ -7,11 +7,15 @@ import { routesRouter } from './api/routes.ts';
 import { sectionsRouter } from './api/sections.ts';
 import { syncRouter } from './api/sync.ts';
 import type { DB } from './db/connection.ts';
-import type { Scheduler } from './garmin/scheduler.ts';
+import { hammerheadRouter } from './api/hammerhead.ts';
 import type { GarminSync } from './garmin/sync.ts';
+import { OAuthStates } from './hammerhead/auth.ts';
+import type { HammerheadOAuth } from './hammerhead/client.ts';
+import type { HammerheadSync } from './hammerhead/sync.ts';
 import { logger } from './logger.ts';
 import type { RouteService } from './matching/routeService.ts';
 import type { RideImporter } from './rides/importService.ts';
+import type { Scheduler } from './sync/scheduler.ts';
 
 /** Everything request handlers need. Built in main.ts (or by tests with fakes). */
 export interface AppContext {
@@ -19,7 +23,9 @@ export interface AppContext {
   routes: RouteService;
   importer: RideImporter;
   garminSync: GarminSync | null;
-  scheduler: Scheduler | null;
+  hammerheadSync: HammerheadSync | null;
+  hammerheadAuth: HammerheadOAuth | null;
+  schedulers: { garmin: Scheduler | null; hammerhead: Scheduler | null };
   /** Fire-and-forget route naming (geocoding is slow and must not block requests). */
   nameRoutesInBackground(): void;
 }
@@ -64,6 +70,7 @@ export function createApp(ctx: AppContext): express.Express {
   app.use('/api/sections', sectionsRouter(ctx));
   app.use('/api/heatmap', heatmapRouter(ctx));
   app.use('/api/sync', syncRouter(ctx));
+  app.use('/api/hammerhead', hammerheadRouter(ctx, new OAuthStates()));
   app.use('/api', (_req, res) => {
     res.status(404).json({ error: 'Unknown API endpoint' });
   });

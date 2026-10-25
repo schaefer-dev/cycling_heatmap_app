@@ -9,7 +9,8 @@
     "typecheck": "tsc -p tsconfig.json",
     "routes:rebuild": "node --env-file-if-exists=../.env src/cli/routes-rebuild.ts",
     "routes:evaluate": "node --env-file-if-exists=../.env src/cli/routes-evaluate.ts",
-    "garmin:sync": "node --env-file-if-exists=../.env src/cli/garmin-sync.ts"
+    "garmin:sync": "node --env-file-if-exists=../.env src/cli/garmin-sync.ts",
+    "hammerhead:sync": "node --env-file-if-exists=../.env src/cli/hammerhead-sync.ts"
   },
   "dependencies": {
     "@garmin/fitsdk": "^21.218.0",

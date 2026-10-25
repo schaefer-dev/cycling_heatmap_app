@@ -1,21 +1,28 @@
 import { backgroundNamer, createApp } from './app.ts';
 import { bootstrap } from './bootstrap.ts';
 import { loadConfig } from './config.ts';
-import { startSyncScheduler } from './garmin/scheduler.ts';
 import { logger } from './logger.ts';
+import { startSyncScheduler } from './sync/scheduler.ts';
 
 const config = loadConfig();
 const services = await bootstrap(config);
 
-const scheduler =
-  services.garminSync && config.garmin.syncIntervalMin > 0
-    ? startSyncScheduler(services.garminSync, config.garmin.syncIntervalMin)
-    : null;
+const schedulers = {
+  garmin:
+    services.garminSync && config.garmin.syncIntervalMin > 0
+      ? startSyncScheduler(services.garminSync, config.garmin.syncIntervalMin)
+      : null,
+  // Offset from the Garmin run so the two syncs rarely compete for the database.
+  hammerhead:
+    services.hammerheadSync && config.hammerhead && config.hammerhead.syncIntervalMin > 0
+      ? startSyncScheduler(services.hammerheadSync, config.hammerhead.syncIntervalMin, 90_000)
+      : null,
+};
 
 const nameRoutes = backgroundNamer(services.routes);
 const app = createApp({
   ...services,
-  scheduler,
+  schedulers,
   nameRoutesInBackground: () => void nameRoutes(),
 });
 
@@ -28,7 +35,8 @@ void nameRoutes();
 
 function shutdown(signal: string) {
   logger.info(`${signal} received, shutting down`);
-  scheduler?.stop();
+  schedulers.garmin?.stop();
+  schedulers.hammerhead?.stop();
   server.close(() => {
     services.db.close();
     process.exit(0);

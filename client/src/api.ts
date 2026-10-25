@@ -18,9 +18,10 @@ export interface Ride {
   duration_s: number | null;
   moving_time_s: number | null;
   notes: string | null;
-  source: 'gpx' | 'garmin';
+  source: 'gpx' | 'garmin' | 'hammerhead';
   activity_type: string | null;
   garmin_activity_id: number | null;
+  hammerhead_activity_id: string | null;
   route_id: string | null;
   route_name?: string | null;
   route_similarity: number | null;
@@ -123,7 +124,9 @@ export interface SyncRun {
   error: string | null;
 }
 
-export interface SyncStatus {
+export type SyncProvider = 'garmin' | 'hammerhead';
+
+export interface ProviderSyncStatus {
   configured: boolean;
   running: boolean;
   next_run_at: string | null;
@@ -131,6 +134,11 @@ export interface SyncStatus {
   last_success_at: string | null;
   recent_runs: SyncRun[];
   activities: Partial<Record<'imported' | 'linked' | 'skipped' | 'failed', number>>;
+}
+
+export interface SyncStatus {
+  garmin: ProviderSyncStatus;
+  hammerhead: ProviderSyncStatus & { connected: boolean; connected_at: string | null };
 }
 
 export interface FilePreview {
@@ -295,5 +303,10 @@ export const getStats = async () => (await http.get<Stats>('/heatmap/stats')).da
 
 export const getSyncStatus = async () => (await http.get<SyncStatus>('/sync/status')).data;
 
-export const startGarminSync = async (mode: 'incremental' | 'backfill' = 'incremental') =>
-  (await http.post<{ started: boolean }>('/sync/garmin', { mode })).data;
+export const startSync = async (
+  provider: SyncProvider,
+  mode: 'incremental' | 'backfill' = 'incremental'
+) => (await http.post<{ started: boolean }>(`/sync/${provider}`, { mode })).data;
+
+/** Browser navigation target that starts the Hammerhead OAuth flow. */
+export const HAMMERHEAD_CONNECT_URL = '/api/hammerhead/connect';

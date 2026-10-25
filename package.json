@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Personal cycling ride archive with heatmap, route grouping and Garmin sync",
+  "description": "Personal cycling ride archive with heatmap, route grouping and Garmin/Hammerhead sync",
   "license": "ISC",
   "workspaces": [
     "server",
@@ -26,7 +26,8 @@
     "check": "npm run lint && npm run typecheck && npm run test",
     "routes:rebuild": "npm run routes:rebuild -w server --",
     "routes:evaluate": "npm run routes:evaluate -w server --",
-    "garmin:sync": "npm run garmin:sync -w server --"
+    "garmin:sync": "npm run garmin:sync -w server --",
+    "hammerhead:sync": "npm run hammerhead:sync -w server --"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

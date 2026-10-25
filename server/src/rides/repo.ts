@@ -13,6 +13,8 @@ import {
 } from '../track/codec.ts';
 import { GEOMETRY_VERSION, type RideGeometry } from '../track/geometry.ts';
 
+export type RideSource = 'gpx' | 'garmin' | 'hammerhead';
+
 export interface RideRow {
   id: string;
   title: string | null;
@@ -25,9 +27,10 @@ export interface RideRow {
   duration_s: number | null;
   moving_time_s: number | null;
   notes: string | null;
-  source: 'gpx' | 'garmin';
+  source: RideSource;
   activity_type: string | null;
   garmin_activity_id: number | null;
+  hammerhead_activity_id: string | null;
   route_id: string | null;
   route_similarity: number | null;
   route_direction: 'forward' | 'reverse' | null;
@@ -37,7 +40,7 @@ export interface RideRow {
 
 export const RIDE_COLUMNS = `id, title, date, start_time, bike_type, bike_type_source, distance_km,
   elevation_gain_m, duration_s, moving_time_s, notes, source, activity_type, garmin_activity_id,
-  route_id, route_similarity, route_direction, route_assignment, created_at`;
+  hammerhead_activity_id, route_id, route_similarity, route_direction, route_assignment, created_at`;
 
 export interface NewRideRow {
   id: string;
@@ -50,18 +53,21 @@ export interface NewRideRow {
   elevationGainM: number;
   durationS: number | null;
   movingTimeS: number | null;
-  source: 'gpx' | 'garmin';
+  source: RideSource;
   activityType: string | null;
   garminActivityId: number | null;
+  hammerheadActivityId: string | null;
 }
 
 export function insertRide(db: DB, r: NewRideRow): void {
   stmt(
     db,
     `INSERT INTO rides (id, title, date, start_time, bike_type, bike_type_source, distance_km,
-       elevation_gain_m, duration_s, moving_time_s, source, activity_type, garmin_activity_id)
+       elevation_gain_m, duration_s, moving_time_s, source, activity_type, garmin_activity_id,
+       hammerhead_activity_id)
      VALUES (@id, @title, @date, @startTime, @bikeType, @bikeTypeSource, @distanceKm,
-       @elevationGainM, @durationS, @movingTimeS, @source, @activityType, @garminActivityId)`
+       @elevationGainM, @durationS, @movingTimeS, @source, @activityType, @garminActivityId,
+       @hammerheadActivityId)`
   ).run(r);
 }
 
@@ -252,6 +258,12 @@ export function findByGarminId(db: DB, garminActivityId: number): RideRow | unde
   ) as RideRow | undefined;
 }
 
+export function findByHammerheadId(db: DB, activityId: string): RideRow | undefined {
+  return stmt(db, `SELECT ${RIDE_COLUMNS} FROM rides WHERE hammerhead_activity_id = ?`).get(
+    activityId
+  ) as RideRow | undefined;
+}
+
 /** Rides whose recording started within `toleranceS` of `startMs`. */
 export function findByStartTime(db: DB, startMs: number, toleranceS: number): RideRow[] {
   const from = new Date(startMs - toleranceS * 1000).toISOString();
@@ -260,6 +272,37 @@ export function findByStartTime(db: DB, startMs: number, toleranceS: number): Ri
     db,
     `SELECT ${RIDE_COLUMNS} FROM rides WHERE start_time BETWEEN ? AND ? ORDER BY start_time`
   ).all(from, to) as RideRow[];
+}
+
+/** Longest ride considered when looking for rides that overlap a time span. */
+const MAX_RIDE_DURATION_MS = 2 * 86_400_000;
+
+/**
+ * Rides whose recording (start_time … start_time + duration_s) overlaps `startMs … endMs`, with
+ * the overlap as a share of the shorter of the two rides; largest overlap first.
+ */
+export function findOverlapping(
+  db: DB,
+  startMs: number,
+  endMs: number
+): Array<{ ride: RideRow; overlap: number }> {
+  const rows = stmt(
+    db,
+    `SELECT ${RIDE_COLUMNS} FROM rides
+     WHERE start_time >= ? AND start_time < ? AND duration_s > 0`
+  ).all(
+    new Date(startMs - MAX_RIDE_DURATION_MS).toISOString(),
+    new Date(endMs).toISOString()
+  ) as RideRow[];
+  const out: Array<{ ride: RideRow; overlap: number }> = [];
+  for (const ride of rows) {
+    const s = Date.parse(ride.start_time!);
+    const e = s + ride.duration_s! * 1000;
+    const shared = Math.min(e, endMs) - Math.max(s, startMs);
+    const shorter = Math.min(e - s, endMs - startMs);
+    if (shared > 0 && shorter > 0) out.push({ ride, overlap: shared / shorter });
+  }
+  return out.sort((a, b) => b.overlap - a.overlap);
 }
 
 /** Fallback for files without timestamps: same day, same length, same start and end. */
@@ -311,6 +354,10 @@ export function saveDevices(db: DB, rideId: string, devices: readonly RideDevice
       d.antDeviceNumber
     );
   }
+}
+
+export function hasDevices(db: DB, rideId: string): boolean {
+  return !!stmt(db, `SELECT 1 FROM ride_devices WHERE ride_id = ? LIMIT 1`).get(rideId);
 }
 
 export function listDevices(db: DB, rideId: string) {

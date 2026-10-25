@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { z } from 'zod';
 import { DEFAULT_GARMIN_BASE_URL } from './garmin/client.ts';
+import { DEFAULT_HAMMERHEAD_API_URL, DEFAULT_HAMMERHEAD_AUTH_URL } from './hammerhead/client.ts';
 
 const REPO_ROOT = path.resolve(import.meta.dirname, '../..');
 
@@ -18,6 +19,13 @@ const envSchema = z.object({
   GARMIN_API_BASE_URL: z.url().default(DEFAULT_GARMIN_BASE_URL),
   /** Minutes between automatic syncs; 0 disables the scheduler (manual "Sync now" still works). */
   GARMIN_SYNC_INTERVAL_MIN: z.coerce.number().min(0).default(60),
+  HAMMERHEAD_CLIENT_ID: optionalString,
+  HAMMERHEAD_CLIENT_SECRET: optionalString,
+  /** Must exactly match a redirect URL registered in the Hammerhead dashboard. */
+  HAMMERHEAD_REDIRECT_URI: z.url().default('http://localhost:5173/api/hammerhead/callback'),
+  HAMMERHEAD_AUTH_URL: z.url().default(DEFAULT_HAMMERHEAD_AUTH_URL),
+  HAMMERHEAD_API_URL: z.url().default(DEFAULT_HAMMERHEAD_API_URL),
+  HAMMERHEAD_SYNC_INTERVAL_MIN: z.coerce.number().min(0).default(60),
   /** Share of each ride that must lie on the other for both to be the same route. */
   ROUTE_MATCH_THRESHOLD: z.coerce.number().min(0.5).max(1).default(0.9),
   /** Max distance (m) between tracks that still counts as "the same road". */
@@ -39,6 +47,15 @@ export interface Config {
   fitDir: string;
   timeZone: string;
   garmin: { apiKey: string | undefined; baseUrl: string; syncIntervalMin: number };
+  /** null when HAMMERHEAD_CLIENT_ID / HAMMERHEAD_CLIENT_SECRET are not both set. */
+  hammerhead: {
+    clientId: string;
+    clientSecret: string;
+    redirectUri: string;
+    authUrl: string;
+    apiUrl: string;
+    syncIntervalMin: number;
+  } | null;
   matching: { threshold: number; toleranceM: number };
   geocoder: { enabled: boolean; baseUrl: string; language: string; userAgent: string };
 }
@@ -62,6 +79,17 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       baseUrl: e.GARMIN_API_BASE_URL,
       syncIntervalMin: e.GARMIN_SYNC_INTERVAL_MIN,
     },
+    hammerhead:
+      e.HAMMERHEAD_CLIENT_ID && e.HAMMERHEAD_CLIENT_SECRET
+        ? {
+            clientId: e.HAMMERHEAD_CLIENT_ID,
+            clientSecret: e.HAMMERHEAD_CLIENT_SECRET,
+            redirectUri: e.HAMMERHEAD_REDIRECT_URI,
+            authUrl: e.HAMMERHEAD_AUTH_URL,
+            apiUrl: e.HAMMERHEAD_API_URL,
+            syncIntervalMin: e.HAMMERHEAD_SYNC_INTERVAL_MIN,
+          }
+        : null,
     matching: { threshold: e.ROUTE_MATCH_THRESHOLD, toleranceM: e.ROUTE_MATCH_TOLERANCE_M },
     geocoder: {
       enabled: e.GEOCODER_ENABLED,

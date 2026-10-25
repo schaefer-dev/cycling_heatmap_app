@@ -1,11 +1,20 @@
 import { ConflictError } from '../errors.ts';
 import { logger } from '../logger.ts';
-import { GarminAuthError } from './client.ts';
-import type { GarminSync } from './sync.ts';
 
 export interface Scheduler {
   stop(): void;
   nextRunAt(): Date | null;
+}
+
+/** What the scheduler needs from a provider sync (GarminSync, HammerheadSync). */
+export interface SyncJob {
+  /** Shown in log lines, e.g. "Garmin". */
+  name: string;
+  run(opts: { mode: 'incremental' }): Promise<unknown>;
+  /** Auth problems are logged as one line (no stack): the user has to act, not the code. */
+  isAuthError(e: unknown): boolean;
+  /** False skips the tick silently (e.g. Hammerhead account not connected yet). */
+  isReady?(): boolean;
 }
 
 /**
@@ -13,7 +22,7 @@ export interface Scheduler {
  * Errors are logged and recorded in sync_runs; the schedule keeps going.
  */
 export function startSyncScheduler(
-  sync: GarminSync,
+  job: SyncJob,
   intervalMin: number,
   initialDelayMs = 30_000
 ): Scheduler {
@@ -30,19 +39,20 @@ export function startSyncScheduler(
 
   const tick = async () => {
     try {
-      await sync.run({ mode: 'incremental' });
+      if (job.isReady?.() ?? true) await job.run({ mode: 'incremental' });
     } catch (e) {
       if (e instanceof ConflictError)
-        logger.info('Scheduled sync skipped: a sync is already running');
-      else if (e instanceof GarminAuthError) logger.error(`Scheduled sync failed: ${e.message}`);
-      else logger.error('Scheduled sync failed', e);
+        logger.info(`Scheduled ${job.name} sync skipped: a sync is already running`);
+      else if (job.isAuthError(e))
+        logger.error(`Scheduled ${job.name} sync failed: ${(e as Error).message}`);
+      else logger.error(`Scheduled ${job.name} sync failed`, e);
     }
     const base = intervalMin * 60_000;
     schedule(base + (Math.random() - 0.5) * 0.1 * base);
   };
 
   schedule(initialDelayMs);
-  logger.info(`Garmin sync scheduled every ${intervalMin} min`);
+  logger.info(`${job.name} sync scheduled every ${intervalMin} min`);
   return {
     stop() {
       stopped = true;
