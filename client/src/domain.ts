@@ -3,52 +3,53 @@
 export const BIKE_TYPES = ['road', 'gravel', 'mtb'] as const;
 export type BikeType = (typeof BIKE_TYPES)[number];
 
-export const BIKE: Record<BikeType, { label: string; color: string; badge: string }> = {
-  road: { label: 'Road', color: '#3b82f6', badge: 'bg-blue-500' },
-  gravel: { label: 'Gravel', color: '#d97706', badge: 'bg-amber-600' },
-  mtb: { label: 'MTB', color: '#16a34a', badge: 'bg-green-600' },
+/** Colours are tuned for the dark UI and both dark and light base maps. */
+export const BIKE: Record<BikeType, { label: string; color: string }> = {
+  road: { label: 'Road', color: '#60a5fa' },
+  gravel: { label: 'Gravel', color: '#f59e0b' },
+  mtb: { label: 'MTB', color: '#4ade80' },
 };
-export const UNASSIGNED_COLOR = '#6b7280';
+export const UNASSIGNED_COLOR = '#8b93a7';
+
+/** Brand heat ramp (Ridestack icon), from rarely to often ridden. */
+export const HEAT_RAMP = ['#22d3ee', '#a3e635', '#facc15', '#fb923c', '#ef4444'] as const;
+
+/** Heat colour for `value` out of `max`, on a log scale (counts are heavily skewed). */
+export function heatColor(value: number, max: number): string {
+  const t = max > 1 ? Math.log(value) / Math.log(max) : 0;
+  const i = Math.round(Math.min(Math.max(t, 0), 1) * (HEAT_RAMP.length - 1));
+  return HEAT_RAMP[i]!;
+}
 
 export const RATINGS = [
   {
     value: 'excellent',
     label: 'Excellent',
     color: '#22c55e',
-    bg: 'bg-green-500',
-    text: 'text-green-600',
     description: 'Perfect conditions',
   },
   {
     value: 'good',
     label: 'Good',
     color: '#84cc16',
-    bg: 'bg-lime-500',
-    text: 'text-lime-600',
     description: 'Minor issues but rideable',
   },
   {
     value: 'challenging',
     label: 'Challenging',
     color: '#eab308',
-    bg: 'bg-yellow-500',
-    text: 'text-yellow-600',
     description: 'Difficult but manageable',
   },
   {
     value: 'hard',
     label: 'Hard',
     color: '#f97316',
-    bg: 'bg-orange-500',
-    text: 'text-orange-600',
     description: 'Very difficult, consider avoiding',
   },
   {
     value: 'unridable',
     label: 'Unridable',
     color: '#ef4444',
-    bg: 'bg-red-500',
-    text: 'text-red-600',
     description: 'Not possible/safe',
   },
 ] as const;
@@ -72,4 +73,28 @@ export const SURFACE_TAGS = [
 
 export function bikeColor(bikeType: string | null | undefined): string {
   return bikeType && bikeType in BIKE ? BIKE[bikeType as BikeType].color : UNASSIGNED_COLOR;
+}
+
+/**
+ * The user's rating convention for route names: "xS" (x = 1–6 stars), optionally followed by G
+ * (gravel) or R (road), e.g. "6SG Biotop Beeden". Mirrors RATED_ROUTE_NAME in
+ * server/src/matching/plannedSuggestions.ts. Display only: the stored name is never changed.
+ */
+const RATED_NAME = /^\s*([1-6])S([GR])?(?![\p{L}\p{N}])\s*/u;
+
+export interface RouteRating {
+  stars: number;
+  kind: 'gravel' | 'road' | null;
+  /** The name without the rating prefix. */
+  rest: string;
+}
+
+export function parseRouteRating(name: string | null | undefined): RouteRating | null {
+  const m = RATED_NAME.exec(name ?? '');
+  if (!m) return null;
+  return {
+    stars: Number(m[1]),
+    kind: m[2] === 'G' ? 'gravel' : m[2] === 'R' ? 'road' : null,
+    rest: (name ?? '').slice(m[0].length).trim(),
+  };
 }

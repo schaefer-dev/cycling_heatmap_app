@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { MousePointerClick, X } from 'lucide-react';
 import { CircleMarker, MapContainer, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import type { Selection, ViewSettings } from '../../App';
 import {
@@ -15,16 +15,19 @@ import {
   getRoute,
   getRouteTracks,
   getSections,
+  getStats,
   type BikeFilter,
   type LatLngTuple,
   type Ride,
 } from '../../api';
 import { BIKE_TYPES, type BikeType } from '../../domain';
-import { formatKm } from '../../format';
 import { qk } from '../../queryKeys';
 import SectionDetailsPanel from '../SectionDetailsPanel';
 import SectionRatingPanel from '../SectionRatingPanel';
 import { useToast } from '../Toast';
+import { Button } from '../ui/Button';
+import { BASE_MAPS } from './basemaps';
+import { POINT_COLORS } from './colors';
 import HeatmapLayer from './HeatmapLayer';
 import {
   AllTracksLayer,
@@ -34,14 +37,20 @@ import {
   SectionsLayer,
   SelectedRideLayer,
 } from './layers';
+import { Legends } from './Legends';
+import { MapStyleControl, ZoomControls } from './MapControls';
 import { closestPointIndex, lineBounds } from './mapUtils';
+import { PANES } from './panes';
+import RideDetailPanel from './RideDetailPanel';
 import TrackInfoPopup from './TrackInfoPopup';
 
 interface Props {
   selection: Selection;
   bikeFilter: BikeFilter;
   view: ViewSettings;
+  onViewChange(patch: Partial<ViewSettings>): void;
   onSelectRide(rideId: string | null, routeId?: string | null): void;
+  onShowRoute(routeId: string, rideId?: string | null): void;
   onClearSelection(): void;
 }
 
@@ -58,18 +67,25 @@ interface SectionPick {
 
 const DEFAULT_CENTER: LatLngTuple = [49.23, 7.03];
 const SECTION_CLICK_TOLERANCE_M = 100;
+const POINT_STYLE = { color: POINT_COLORS.casing, weight: 2, fillOpacity: 1 };
 
 export default function MapView({
   selection,
   bikeFilter,
   view,
+  onViewChange,
   onSelectRide,
+  onShowRoute,
   onClearSelection,
 }: Props) {
   const toast = useToast();
   const [map, setMap] = useState<L.Map | null>(null);
   const [popup, setPopup] = useState<RidesPopup | null>(null);
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
+  /** Track point under the cursor in the elevation profile (belongs to one ride). */
+  const [hoverPoint, setHoverPoint] = useState<{ rideId: string; index: number } | null>(null);
+  const baseMap = BASE_MAPS[view.baseMap] ?? BASE_MAPS.dark;
+  const tone = baseMap.tone;
   /** Section rating in progress; belongs to one ride and ends when another ride is selected. */
   const [pick, setPick] = useState<{
     rideId: string;
@@ -86,6 +102,7 @@ export default function MapView({
     queryKey: qk.bounds(bikeFilter),
     queryFn: () => getMapBounds(bikeFilter),
   });
+  const { data: stats } = useQuery({ queryKey: qk.stats(), queryFn: getStats });
   const { data: heat } = useQuery({
     queryKey: qk.heatmap(bikeFilter),
     queryFn: () => getHeatmapData(bikeFilter),
@@ -136,6 +153,13 @@ export default function MapView({
   const start = activePick?.start ?? null;
   const end = activePick?.end ?? null;
   const resetPicking = useCallback(() => setPick(null), []);
+  const hoverLatLng =
+    rideTrack && hoverPoint && hoverPoint.rideId === selection.rideId
+      ? (rideTrack[hoverPoint.index] ?? null)
+      : null;
+  const allBounds: [LatLngTuple, LatLngTuple] | null = bounds
+    ? [bounds.southwest, bounds.northeast]
+    : null;
 
   const fit = useMemo(() => {
     if (selection.rideId)
@@ -205,13 +229,26 @@ export default function MapView({
       <MapContainer
         center={bounds?.center ?? DEFAULT_CENTER}
         zoom={12}
+        zoomControl={false}
         className="h-full w-full"
         ref={setMap}
       >
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          key={view.baseMap}
+          attribution={baseMap.attribution}
+          url={baseMap.url}
+          maxNativeZoom={baseMap.maxNativeZoom}
+          maxZoom={19}
         />
+        {baseMap.labelsUrl && (
+          <TileLayer
+            key={`${view.baseMap}-labels`}
+            url={baseMap.labelsUrl}
+            maxNativeZoom={baseMap.maxNativeZoom}
+            maxZoom={19}
+            zIndex={2}
+          />
+        )}
         <AutoFit fitKey={fit.key} bounds={fit.bounds} />
         <ClickHandler onClick={onMapClick} />
         <MapPanes>
@@ -220,13 +257,19 @@ export default function MapView({
               points={heat}
               intensity={view.heatmapIntensity}
               opacity={view.heatmapOpacity}
+              tone={tone}
             />
           )}
           {view.showAllTracks && allTracks && (
             <AllTracksLayer tracks={allTracks} opacity={view.trackOpacity} />
           )}
           {selection.routeId && routeTracks && (
-            <RouteLayer rides={routeTracks} reference={referenceTrack} dimmed={!!rideTrack} />
+            <RouteLayer
+              rides={routeTracks}
+              reference={referenceTrack}
+              dimmed={!!rideTrack}
+              tone={tone}
+            />
           )}
           {rideTrack && <SelectedRideLayer track={rideTrack} />}
           {showDeviation && deviation && <DeviationLayer deviation={deviation} />}
@@ -238,21 +281,32 @@ export default function MapView({
             />
           )}
           {sectionTrack && <SelectedRideLayer track={sectionTrack} />}
+          {start && (
+            <CircleMarker
+              center={[start.lat, start.lng]}
+              radius={8}
+              pane={PANES.points.name}
+              pathOptions={{ ...POINT_STYLE, fillColor: POINT_COLORS.start }}
+            />
+          )}
+          {end && (
+            <CircleMarker
+              center={[end.lat, end.lng]}
+              radius={8}
+              pane={PANES.points.name}
+              pathOptions={{ ...POINT_STYLE, fillColor: POINT_COLORS.end }}
+            />
+          )}
+          {hoverLatLng && (
+            <CircleMarker
+              center={hoverLatLng}
+              radius={6}
+              interactive={false}
+              pane={PANES.points.name}
+              pathOptions={{ ...POINT_STYLE, fillColor: POINT_COLORS.cursor }}
+            />
+          )}
         </MapPanes>
-        {start && (
-          <CircleMarker
-            center={[start.lat, start.lng]}
-            radius={8}
-            pathOptions={{ color: '#16a34a', fillColor: '#22c55e', fillOpacity: 1 }}
-          />
-        )}
-        {end && (
-          <CircleMarker
-            center={[end.lat, end.lng]}
-            radius={8}
-            pathOptions={{ color: '#dc2626', fillColor: '#ef4444', fillOpacity: 1 }}
-          />
-        )}
         {popup && (
           <Popup position={popup.position} eventHandlers={{ remove: () => setPopup(null) }}>
             <TrackInfoPopup rides={popup.rides} onPreview={previewRide} />
@@ -260,39 +314,67 @@ export default function MapView({
         )}
       </MapContainer>
 
+      <ZoomControls map={map} bounds={allBounds} />
+      <MapStyleControl
+        view={view}
+        onChange={onViewChange}
+        sectionCount={stats?.sections.total}
+        center={bounds?.center ?? null}
+      />
+
       {picking && !end && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000] bg-blue-500 text-white px-4 py-2 rounded-lg shadow-lg text-sm">
-          Click on the blue track to select the {start ? 'END' : 'START'} point
-          <button onClick={resetPicking} className="ml-3 underline">
+        <div
+          role="status"
+          className="animate-pop-in absolute top-3 left-1/2 z-[1000] flex -translate-x-1/2 items-center gap-3 rounded-lg border border-line bg-panel py-2 pr-2 pl-3 text-sm shadow-float"
+        >
+          <MousePointerClick aria-hidden className="size-4 text-signal" />
+          <span>
+            <span className="text-muted">Step {start ? 2 : 1} of 3 </span>
+            Click the highlighted track to set the {start ? 'end' : 'start'} point
+          </span>
+          <Button size="sm" variant="ghost" onClick={resetPicking}>
             Cancel
-          </button>
+          </Button>
         </div>
       )}
 
       {(selection.rideId || selection.routeId) && !picking && (
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-[1000] flex gap-2">
-          {rideTrack && (
-            <button
-              onClick={() => setPick({ rideId: selection.rideId!, start: null, end: null })}
-              className="bg-white hover:bg-gray-50 shadow-lg px-4 py-2 rounded-lg text-sm font-medium text-gray-800 border"
-            >
-              + Rate section
-            </button>
-          )}
+        <div className="absolute bottom-6 left-1/2 z-[1000] -translate-x-1/2">
           <button
             onClick={clearSelection}
-            className="bg-white hover:bg-gray-50 shadow-lg px-4 py-2 rounded-lg text-sm font-medium text-gray-700 border"
+            className="inline-flex h-9 items-center gap-2 rounded-full border border-line bg-panel px-4 text-sm font-medium text-fg shadow-float transition-colors hover:bg-active"
           >
-            × Clear selection
+            <X aria-hidden className="size-4 text-muted" />
+            Clear selection
           </button>
         </div>
       )}
 
-      {selection.routeId && route && (
-        <RouteLegend
-          name={route.name}
-          rideCount={route.ride_count}
-          deviation={showDeviation ? deviation : undefined}
+      <Legends
+        tone={tone}
+        showHeat={view.showHeatmap}
+        route={
+          selection.routeId && route
+            ? {
+                name: route.name,
+                rideCount: route.ride_count,
+                deviation: showDeviation ? deviation : undefined,
+              }
+            : undefined
+        }
+      />
+
+      {ride && rideTrack && !picking && !selectedSection && (
+        <RideDetailPanel
+          key={ride.id}
+          ride={ride}
+          showRouteAction={!!ride.route_id && ride.route_id !== selection.routeId}
+          onRateSection={() => setPick({ rideId: ride.id, start: null, end: null })}
+          onShowRoute={(routeId) => onShowRoute(routeId, ride.id)}
+          onClose={clearSelection}
+          onHoverPoint={(index) =>
+            setHoverPoint(index === null ? null : { rideId: ride.id, index })
+          }
         />
       )}
 
@@ -345,62 +427,4 @@ function AutoFit({
 function ClickHandler({ onClick }: { onClick(latlng: L.LatLng): void }) {
   useMapEvents({ click: (e) => onClick(e.latlng) });
   return null;
-}
-
-function RouteLegend({
-  name,
-  rideCount,
-  deviation,
-}: {
-  name: string | null;
-  rideCount: number;
-  deviation?: { detourLengthM: number; skippedLengthM: number };
-}) {
-  return (
-    <div className="absolute bottom-6 left-4 z-[1000] bg-white/95 rounded-lg shadow-lg px-3 py-2 text-xs space-y-1 max-w-xs">
-      <div className="font-semibold text-gray-800 truncate">{name ?? 'Route'}</div>
-      <LegendLine color="#5b21b6" label="Route reference" />
-      {rideCount > 1 && <LegendLine color="#7c3aed" label={`All ${rideCount} rides`} faint />}
-      {deviation && (
-        <>
-          <LegendLine color="#2563eb" label="Selected ride" />
-          <LegendLine
-            color="#f97316"
-            label={`Detour · ${formatKm(deviation.detourLengthM / 1000)}`}
-          />
-          <LegendLine
-            color="#dc2626"
-            dashed
-            label={`Skipped · ${formatKm(deviation.skippedLengthM / 1000)}`}
-          />
-        </>
-      )}
-    </div>
-  );
-}
-
-function LegendLine({
-  color,
-  label,
-  dashed,
-  faint,
-}: {
-  color: string;
-  label: string;
-  dashed?: boolean;
-  faint?: boolean;
-}) {
-  return (
-    <div className="flex items-center gap-2 text-gray-600">
-      <span
-        className="inline-block w-6 h-0 border-t-4"
-        style={{
-          borderColor: color,
-          borderTopStyle: dashed ? 'dashed' : 'solid',
-          opacity: faint ? 0.5 : 1,
-        }}
-      />
-      {label}
-    </div>
-  );
 }

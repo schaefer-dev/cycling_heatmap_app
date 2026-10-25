@@ -125,7 +125,7 @@ describe('RoutesTab', () => {
 
   it('lists routes (most recent first) and filters repeated ones', async () => {
     setup();
-    const cards = await screen.findAllByRole('button', { expanded: false });
+    const cards = await screen.findAllByRole('button', { name: /runde/ });
     expect(cards.map((c) => within(c).getByText(/runde/).textContent)).toEqual([
       'Seerunde',
       'Waldrunde',
@@ -146,7 +146,7 @@ describe('RoutesTab', () => {
     setup(vi.fn(), 'r1');
     expect(await screen.findByText('Sun, 1 Jun 2025')).toBeInTheDocument();
     expect(screen.getByText('Wed, 1 May 2024')).toBeInTheDocument();
-    expect(screen.getByText('93%')).toHaveClass('text-orange-600');
+    expect(screen.getByText('93%')).toHaveClass('text-warn');
     expect(screen.getByTitle('Ridden in reverse direction')).toBeInTheDocument();
     expect(screen.getByText('ref')).toBeInTheDocument();
   });

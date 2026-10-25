@@ -1,6 +1,6 @@
 import type { Ride } from '../../api';
-import { BIKE } from '../../domain';
 import { formatDate, formatKm } from '../../format';
+import { BikeChip, RouteName } from '../ui/badges';
 
 /** "N rides at this location" list shown when clicking the map. */
 export default function TrackInfoPopup({
@@ -15,36 +15,33 @@ export default function TrackInfoPopup({
     .map((r) => r.date!)
     .sort();
   return (
-    <div className="min-w-[220px] max-w-[300px]">
-      <div className="font-semibold text-gray-800 mb-2 pb-2 border-b">
+    <div className="w-[17rem]">
+      <div className="pr-5 text-sm font-semibold text-fg">
         {rides.length} ride{rides.length === 1 ? '' : 's'} at this location
       </div>
       {dated.length > 1 && (
-        <div className="text-xs text-gray-500 mb-2 pb-2 border-b">
-          First {formatDate(dated[0])} · last {formatDate(dated[dated.length - 1])}
+        <div className="tnum mt-0.5 text-xs text-muted">
+          First {formatDate(dated[0])}, last {formatDate(dated[dated.length - 1])}
         </div>
       )}
-      <ul className="max-h-[220px] overflow-y-auto space-y-1.5">
+      <ul className="-mx-2 mt-2 max-h-[240px] space-y-px overflow-y-auto border-t border-line pt-1.5">
         {rides.map((r) => (
           <li key={r.id}>
             <button
               onClick={() => onPreview(r)}
-              className="w-full text-left hover:bg-gray-50 rounded px-1 py-0.5"
+              className="w-full rounded-md px-2 py-1.5 text-left hover:bg-raised"
             >
-              <div className="flex items-center gap-2 text-sm">
-                <span className="font-medium text-gray-700 truncate flex-1">
+              <span className="flex items-center gap-2">
+                <span className="min-w-0 flex-1 truncate font-medium text-fg">
                   {r.title ?? 'Untitled ride'}
                 </span>
-                <span
-                  className={`text-[10px] px-1.5 rounded text-white ${r.bike_type ? BIKE[r.bike_type].badge : 'bg-gray-400'}`}
-                >
-                  {r.bike_type ? BIKE[r.bike_type].label : '?'}
-                </span>
-              </div>
-              <div className="text-xs text-gray-500 truncate">
-                {formatDate(r.date, { weekday: true })} · {formatKm(r.distance_km)}
-                {r.route_name ? ` · ${r.route_name}` : ''}
-              </div>
+                <BikeChip type={r.bike_type} />
+              </span>
+              <span className="tnum mt-0.5 flex min-w-0 gap-3 text-xs text-muted">
+                <span className="shrink-0">{formatDate(r.date, { weekday: true })}</span>
+                <span className="shrink-0">{formatKm(r.distance_km)}</span>
+                {r.route_name && <RouteName name={r.route_name} className="text-faint" />}
+              </span>
             </button>
           </li>
         ))}

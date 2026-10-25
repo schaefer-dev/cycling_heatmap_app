@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import type { BikeFilter } from './api';
 import ImportModal from './components/ImportModal';
 import Sidebar from './components/Sidebar';
+import { ConfirmProvider } from './components/ui/Confirm';
 import { ToastProvider } from './components/Toast';
 import MapView from './components/map/MapView';
 import { usePersistentState } from './usePersistentState';
@@ -11,7 +12,10 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: false } },
 });
 
+export type BaseMap = 'dark' | 'light' | 'osm';
+
 export interface ViewSettings {
+  baseMap: BaseMap;
   showHeatmap: boolean;
   heatmapIntensity: number;
   heatmapOpacity: number;
@@ -22,6 +26,7 @@ export interface ViewSettings {
 }
 
 const DEFAULT_VIEW: ViewSettings = {
+  baseMap: 'dark',
   showHeatmap: true,
   heatmapIntensity: 50,
   heatmapOpacity: 0.8,
@@ -60,10 +65,11 @@ export default function App() {
     setSelection({ routeId, rideId: null });
   }, []);
 
+  /** Opens a route in the Routes tab, optionally keeping one of its rides selected. */
   const showRoute = useCallback(
-    (routeId: string) => {
+    (routeId: string, rideId: string | null = null) => {
       setTab('routes');
-      setSelection({ routeId, rideId: null });
+      setSelection({ routeId, rideId });
     },
     [setTab]
   );
@@ -71,31 +77,33 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
-        <div className="h-screen flex bg-gray-100">
-          <Sidebar
-            tab={tab}
-            onTabChange={setTab}
-            selection={selection}
-            onSelectRide={selectRide}
-            onSelectRoute={selectRoute}
-            onShowRoute={showRoute}
-            bikeFilter={bikeFilter}
-            onBikeFilterChange={setBikeFilter}
-            view={view}
-            onViewChange={updateView}
-            onImportClick={() => setShowImport(true)}
-          />
-          <div className="flex-1 relative">
-            <MapView
+        <ConfirmProvider>
+          <div className="flex h-screen min-w-[900px] bg-canvas">
+            <Sidebar
+              tab={tab}
+              onTabChange={setTab}
               selection={selection}
-              bikeFilter={bikeFilter}
-              view={view}
               onSelectRide={selectRide}
-              onClearSelection={() => setSelection({ routeId: null, rideId: null })}
+              onSelectRoute={selectRoute}
+              onShowRoute={showRoute}
+              bikeFilter={bikeFilter}
+              onBikeFilterChange={setBikeFilter}
+              onImportClick={() => setShowImport(true)}
             />
+            <main className="relative min-w-0 flex-1">
+              <MapView
+                selection={selection}
+                bikeFilter={bikeFilter}
+                view={view}
+                onViewChange={updateView}
+                onSelectRide={selectRide}
+                onShowRoute={showRoute}
+                onClearSelection={() => setSelection({ routeId: null, rideId: null })}
+              />
+            </main>
+            {showImport && <ImportModal onClose={() => setShowImport(false)} />}
           </div>
-          {showImport && <ImportModal onClose={() => setShowImport(false)} />}
-        </div>
+        </ConfirmProvider>
       </ToastProvider>
     </QueryClientProvider>
   );

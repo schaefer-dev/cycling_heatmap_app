@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { FilePreview, RouteSummary } from '../src/api';
 import { summarizePreview } from '../src/components/importSummary';
 import { sortRoutes } from '../src/components/sidebar/routeSort';
+import { HEAT_RAMP, heatColor, parseRouteRating } from '../src/domain';
 import {
   formatDate,
   formatDuration,
@@ -87,6 +88,45 @@ describe('sortRoutes', () => {
     expect(ids('count')).toEqual(['b', 'c', 'a']);
     expect(ids('distance')).toEqual(['b', 'a', 'c']);
     expect(ids('name')).toEqual(['b', 'a', 'c']);
+  });
+
+  it('sorts by rating: most stars first, unrated last, ties by last ridden', () => {
+    const rated = [
+      route({ id: 'u', name: 'Unrated loop', last_ridden: '2026-01-01' }),
+      route({ id: 'r4', name: '4S Hills', last_ridden: '2024-01-01' }),
+      route({ id: 'r6', name: '6SG Forest', last_ridden: '2023-01-01' }),
+      route({ id: 'r4b', name: '4SR Coast', last_ridden: '2025-01-01' }),
+    ];
+    expect(sortRoutes(rated, 'rating').map((r) => r.id)).toEqual(['r6', 'r4b', 'r4', 'u']);
+  });
+});
+
+describe('parseRouteRating', () => {
+  it('reads "xS[G|R]" prefixes and leaves other names alone', () => {
+    expect(parseRouteRating('6SG Biotop Beeden')).toEqual({
+      stars: 6,
+      kind: 'gravel',
+      rest: 'Biotop Beeden',
+    });
+    expect(parseRouteRating('5SR Rennrad Nied')).toEqual({
+      stars: 5,
+      kind: 'road',
+      rest: 'Rennrad Nied',
+    });
+    expect(parseRouteRating('  3S Pübol')).toEqual({ stars: 3, kind: null, rest: 'Pübol' });
+    expect(parseRouteRating('?S not rated yet')).toBeNull();
+    expect(parseRouteRating('7S too many')).toBeNull();
+    expect(parseRouteRating('5Stars loop')).toBeNull();
+    expect(parseRouteRating(null)).toBeNull();
+  });
+});
+
+describe('heatColor', () => {
+  it('maps counts onto the heat ramp on a log scale', () => {
+    expect(heatColor(1, 20)).toBe(HEAT_RAMP[0]);
+    expect(heatColor(20, 20)).toBe(HEAT_RAMP[4]);
+    expect(heatColor(3, 3)).toBe(HEAT_RAMP[4]);
+    expect(heatColor(1, 1)).toBe(HEAT_RAMP[0]);
   });
 });
 

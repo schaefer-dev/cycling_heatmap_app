@@ -1,12 +1,19 @@
 import { useQuery } from '@tanstack/react-query';
-import type { Selection, SidebarTab, ViewSettings } from '../App';
-import { getStats, getSuggestions, type BikeFilter } from '../api';
+import { Upload } from 'lucide-react';
+import type { Selection, SidebarTab } from '../App';
+import { getStats, getSuggestions, type BikeFilter, type Stats } from '../api';
+import { BIKE, BIKE_TYPES } from '../domain';
 import { qk } from '../queryKeys';
-import LayerControls from './sidebar/LayerControls';
 import RidesTab from './sidebar/RidesTab';
 import RoutesTab from './sidebar/RoutesTab';
 import SuggestionsTab from './sidebar/SuggestionsTab';
-import SyncStatusPanel from './sidebar/SyncStatusPanel';
+import SyncStatusPanel, { useSyncWatcher } from './sidebar/SyncStatusPanel';
+import { overallSyncState, STATE_DOT } from './sidebar/syncState';
+import { BikeDot } from './ui/badges';
+import { Button } from './ui/Button';
+import { cx } from './ui/cx';
+import { ToggleChip } from './ui/fields';
+import { Popover } from './ui/Popover';
 
 interface Props {
   tab: SidebarTab;
@@ -17,10 +24,14 @@ interface Props {
   onShowRoute(routeId: string): void;
   bikeFilter: BikeFilter;
   onBikeFilterChange(filter: BikeFilter): void;
-  view: ViewSettings;
-  onViewChange(patch: Partial<ViewSettings>): void;
   onImportClick(): void;
 }
+
+const TAB_LABEL: Record<SidebarTab, string> = {
+  routes: 'Routes',
+  rides: 'Rides',
+  suggestions: 'Suggestions',
+};
 
 export default function Sidebar(props: Props) {
   const { data: stats } = useQuery({ queryKey: qk.stats(), queryFn: getStats });
@@ -36,68 +47,70 @@ export default function Sidebar(props: Props) {
   };
 
   return (
-    <div className="w-96 bg-white shadow-lg flex flex-col h-full min-h-0">
-      <div className="p-4 border-b space-y-3">
-        <div className="flex items-center justify-between">
-          <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight text-gray-800">
-            <img src="/favicon.svg" alt="" className="h-7 w-7" />
+    <aside className="flex h-full min-h-0 w-[380px] shrink-0 flex-col border-r border-line bg-panel max-[1100px]:w-[340px]">
+      <header className="space-y-3 px-4 pt-4 pb-3">
+        <div className="flex items-center gap-2">
+          <h1 className="flex min-w-0 flex-1 items-center gap-2.5 text-lg font-bold tracking-tight">
+            <img src="/favicon.svg" alt="" className="size-7" />
             Ridestack
           </h1>
-          {stats && (
-            <div className="text-xs text-gray-500">
-              {stats.rides.total} rides · {stats.rides.total_distance_km.toLocaleString()} km
-            </div>
-          )}
-        </div>
-        <SyncStatusPanel />
-        <div className="flex gap-2">
-          <button
+          <SourcesButton />
+          <Button
+            size="sm"
             onClick={props.onImportClick}
-            className="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium"
+            icon={<Upload aria-hidden className="size-3.5" />}
           >
-            Import files
-          </button>
-          <select
-            aria-label="Filter by bike type"
-            value={props.bikeFilter ?? ''}
-            onChange={(e) => props.onBikeFilterChange((e.target.value || null) as BikeFilter)}
-            className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm"
-          >
-            <option value="">All bikes</option>
-            <option value="road">Road</option>
-            <option value="gravel">Gravel</option>
-            <option value="mtb">MTB</option>
-            <option value="unassigned">
-              Unassigned
-              {stats?.rides.by_type.unassigned ? ` (${stats.rides.by_type.unassigned})` : ''}
-            </option>
-          </select>
+            Import
+          </Button>
         </div>
-        <LayerControls view={props.view} onChange={props.onViewChange} />
+        {stats && <Totals stats={stats} />}
+        <SyncStatusPanel only="problems" />
+        <BikeFilterChips
+          stats={stats}
+          value={props.bikeFilter}
+          onChange={props.onBikeFilterChange}
+        />
+      </header>
+
+      <div className="flex gap-1 border-b border-line px-2" role="tablist">
+        {(['routes', 'rides', 'suggestions'] as const).map((t) => {
+          const selected = props.tab === t;
+          const highlight = t === 'suggestions' && (badge[t] ?? 0) > 0;
+          return (
+            <button
+              key={t}
+              id={`tab-${t}`}
+              role="tab"
+              aria-selected={selected}
+              aria-controls="sidebar-panel"
+              onClick={() => props.onTabChange(t)}
+              className={cx(
+                '-mb-px flex items-center gap-1.5 border-b-2 px-2.5 py-2.5 text-sm font-medium transition-colors',
+                selected ? 'border-signal text-fg' : 'border-transparent text-muted hover:text-fg'
+              )}
+            >
+              {TAB_LABEL[t]}
+              {badge[t] !== undefined && (
+                <span
+                  className={cx(
+                    'tnum rounded-sm px-1 text-2xs',
+                    highlight ? 'bg-signal/15 font-semibold text-signal' : 'text-faint'
+                  )}
+                >
+                  {badge[t]}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      <div className="flex border-b text-sm" role="tablist">
-        {(['routes', 'rides', 'suggestions'] as const).map((t) => (
-          <button
-            key={t}
-            role="tab"
-            aria-selected={props.tab === t}
-            onClick={() => props.onTabChange(t)}
-            className={`flex-1 py-2 font-medium capitalize ${
-              props.tab === t
-                ? 'text-blue-600 border-b-2 border-blue-600'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {t}
-            {badge[t] !== undefined && (
-              <span className="ml-1 text-xs text-gray-400">{badge[t]}</span>
-            )}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex-1 min-h-0 flex flex-col">
+      <div
+        id="sidebar-panel"
+        role="tabpanel"
+        aria-labelledby={`tab-${props.tab}`}
+        className="flex min-h-0 flex-1 flex-col"
+      >
         {props.tab === 'routes' ? (
           <RoutesTab
             bikeFilter={props.bikeFilter}
@@ -119,24 +132,99 @@ export default function Sidebar(props: Props) {
           />
         )}
       </div>
+    </aside>
+  );
+}
 
-      {stats && (
-        <div className="px-4 py-2 border-t bg-gray-50 grid grid-cols-4 gap-2 text-center text-xs">
-          <Stat value={stats.rides.by_type.road} label="Road" className="text-blue-600" />
-          <Stat value={stats.rides.by_type.gravel} label="Gravel" className="text-amber-600" />
-          <Stat value={stats.rides.by_type.mtb} label="MTB" className="text-green-600" />
-          <Stat value={stats.sections.total} label="Sections" className="text-gray-700" />
-        </div>
-      )}
+function Totals({ stats }: { stats: Stats }) {
+  const figures: Array<[string, string]> = [
+    [stats.rides.total.toLocaleString('en-GB'), 'rides'],
+    [Math.round(stats.rides.total_distance_km).toLocaleString('en-GB'), 'km'],
+    [Math.round(stats.rides.total_elevation_m).toLocaleString('en-GB'), 'm climbed'],
+  ];
+  return (
+    <div className="flex items-baseline gap-4">
+      {figures.map(([value, unit]) => (
+        <span key={unit} className="text-sm">
+          <span className="tnum font-semibold text-fg">{value}</span>{' '}
+          <span className="text-muted">{unit}</span>
+        </span>
+      ))}
     </div>
   );
 }
 
-function Stat({ value, label, className }: { value: number; label: string; className: string }) {
+/** Sync status at a glance; the popover holds the per-provider rows and actions. */
+function SourcesButton() {
+  // Mounted for the app's lifetime: keeps polling and reports finished runs.
+  const status = useSyncWatcher();
+  const state = overallSyncState(status);
   return (
-    <div>
-      <div className={`font-semibold ${className}`}>{value}</div>
-      <div className="text-gray-500">{label}</div>
+    <Popover
+      label="Sync sources"
+      align="end"
+      className="w-80 px-4 py-2"
+      trigger={(p) => (
+        <button
+          {...p}
+          type="button"
+          className="inline-flex h-7 items-center gap-2 rounded-md px-2.5 text-xs font-medium text-muted transition-colors hover:bg-raised hover:text-fg aria-expanded:bg-raised aria-expanded:text-fg"
+        >
+          <span aria-hidden className={cx('size-2 rounded-full', STATE_DOT[state])} />
+          Sources
+        </button>
+      )}
+    >
+      <>
+        <p className="pt-1 pb-1 text-xs text-faint">
+          New rides arrive automatically. Sync now fetches them right away.
+        </p>
+        <SyncStatusPanel />
+      </>
+    </Popover>
+  );
+}
+
+function BikeFilterChips({
+  stats,
+  value,
+  onChange,
+}: {
+  stats: Stats | undefined;
+  value: BikeFilter;
+  onChange(filter: BikeFilter): void;
+}) {
+  const count = (n: number | undefined) =>
+    n === undefined ? null : (
+      <>
+        {' '}
+        <span className="tnum text-faint">{n}</span>
+      </>
+    );
+  return (
+    <div role="group" aria-label="Filter by bike type" className="-mx-1 flex flex-wrap gap-1">
+      <ToggleChip pressed={value === null} onClick={() => onChange(null)}>
+        All bikes
+      </ToggleChip>
+      {BIKE_TYPES.map((t) => (
+        <ToggleChip key={t} pressed={value === t} onClick={() => onChange(t)}>
+          <BikeDot type={t} />
+          {BIKE[t].label}
+          {count(stats?.rides.by_type[t])}
+        </ToggleChip>
+      ))}
+      {/* Only offered while there is something to find (or it is the active filter). */}
+      {(value === 'unassigned' || (stats?.rides.by_type.unassigned ?? 0) > 0) && (
+        <ToggleChip
+          pressed={value === 'unassigned'}
+          onClick={() => onChange('unassigned')}
+          title="Rides without a bike type"
+        >
+          <BikeDot type={null} />
+          Unassigned
+          {count(stats?.rides.by_type.unassigned)}
+        </ToggleChip>
+      )}
     </div>
   );
 }

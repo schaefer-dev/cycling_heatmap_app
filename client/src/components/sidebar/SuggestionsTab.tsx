@@ -8,10 +8,16 @@ import {
   type SuggestionCandidate,
   type SuggestionGroup,
 } from '../../api';
+import { RefreshCw, Sparkles } from 'lucide-react';
 import { formatDate, formatKm, formatRelative } from '../../format';
 import { invalidateRouteData, qk } from '../../queryKeys';
 import { usePersistentState } from '../../usePersistentState';
 import { useToast } from '../Toast';
+import { Button } from '../ui/Button';
+import { cx } from '../ui/cx';
+import { Switch } from '../ui/fields';
+import { Metrics } from '../ui/Metrics';
+import { EmptyState, SkeletonRows } from '../ui/states';
 
 interface Props {
   selectedRouteId: string | null;
@@ -56,54 +62,62 @@ export default function SuggestionsTab({ selectedRouteId, onSelectRoute }: Props
 
   const library = data?.planned_routes;
   return (
-    <div className="flex-1 min-h-0 flex flex-col">
-      <div className="px-3 py-2 border-b space-y-1.5 text-xs text-gray-600">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="space-y-2.5 border-b border-line p-3 text-xs text-muted">
         <p>
           Your rated Hammerhead planned routes (names starting with 1S…6S, optionally G/R), matched
           to route groups by distance and by when you rode them. Nothing changes until you accept a
           suggestion.
         </p>
         <div className="flex items-center gap-2">
-          <span className="flex-1">
+          <span className="tnum flex-1 text-faint">
             {library
-              ? `${library.rated} rated of ${library.count} planned routes · ${library.synced_at ? `synced ${formatRelative(library.synced_at)}` : 'not synced yet'}`
+              ? `${library.rated} rated of ${library.count} planned routes, ${library.synced_at ? `synced ${formatRelative(library.synced_at)}` : 'not synced yet'}`
               : '…'}
           </span>
-          <button
+          <Button
+            size="sm"
             onClick={() => refresh.mutate()}
             disabled={refresh.isPending}
-            className="text-blue-600 hover:text-blue-800 disabled:text-gray-400 font-medium"
+            icon={
+              <RefreshCw
+                aria-hidden
+                className={cx('size-3', refresh.isPending && 'animate-spin')}
+              />
+            }
           >
             Refresh
-          </button>
+          </Button>
         </div>
         {library?.error && (
-          <div className="bg-red-50 text-red-700 rounded px-2 py-1">
+          <div className="rounded-md border border-danger/30 bg-danger/10 px-3 py-2 text-danger">
             {library.error}{' '}
-            <a href="/api/hammerhead/connect" className="font-medium underline">
+            <a href="/api/hammerhead/connect" className="font-medium text-fg underline">
               Reconnect Hammerhead
             </a>
           </div>
         )}
-        <label className="flex items-center gap-1.5">
-          <input
-            type="checkbox"
-            checked={includeWeak}
-            onChange={(e) => setIncludeWeak(e.target.checked)}
-          />
-          Show weaker matches (distance only)
-          {data ? <span className="text-gray-400">· {data.counts.weak}</span> : null}
-        </label>
+        <Switch
+          checked={includeWeak}
+          onChange={setIncludeWeak}
+          className="text-xs"
+          label={
+            <>
+              Show weaker matches (distance only)
+              {data ? <span className="tnum ml-1.5 text-faint">{data.counts.weak}</span> : null}
+            </>
+          }
+        />
       </div>
 
-      <div className="flex-1 overflow-y-auto p-2 space-y-2">
-        {isLoading && <div className="text-xs text-gray-500 p-2">Loading suggestions…</div>}
+      <div className="flex-1 space-y-2 overflow-y-auto p-2">
+        {isLoading && <SkeletonRows rows={3} />}
         {data && data.groups.length === 0 && (
-          <div className="text-xs text-gray-500 p-2">
+          <EmptyState icon={<Sparkles />}>
             {library?.count
               ? 'No suggestions left to review.'
-              : 'No planned routes yet: connect Hammerhead and refresh.'}
-          </div>
+              : 'No planned routes yet. Connect Hammerhead under Sources, then refresh.'}
+          </EmptyState>
         )}
         {data?.groups.map((g) => (
           <SuggestionCard
@@ -138,52 +152,71 @@ function SuggestionCard({
   const last = formatDate(route.last_ridden);
   return (
     <div
-      className={`rounded-lg border p-2.5 ${selected ? 'border-blue-200 bg-blue-50/50' : 'border-gray-200'}`}
+      className={cx(
+        'rounded-lg border p-1.5',
+        selected ? 'border-line-strong bg-active' : 'border-line bg-raised/40'
+      )}
     >
-      <button onClick={onSelect} className="w-full text-left" title="Show this route on the map">
-        <div className="font-medium text-gray-800 truncate">{route.name ?? 'Unnamed route'}</div>
-        <div className="text-xs text-gray-500">
-          {route.ride_count} ride{route.ride_count === 1 ? '' : 's'} · {formatKm(route.distance_km)}{' '}
-          · {first}
-          {last !== first ? ` – ${last}` : ''}
-        </div>
+      <button
+        onClick={onSelect}
+        className="w-full rounded-md px-2 py-1.5 text-left hover:bg-raised"
+        title="Show this route on the map"
+        aria-pressed={selected}
+      >
+        <span className="block truncate text-sm font-medium text-fg">
+          {route.name ?? 'Unnamed route'}
+        </span>
+        <Metrics
+          className="mt-0.5"
+          items={[
+            `${route.ride_count} ride${route.ride_count === 1 ? '' : 's'}`,
+            formatKm(route.distance_km),
+            `${first}${last !== first ? ` – ${last}` : ''}`,
+          ]}
+        />
       </button>
-      <ul className="mt-1.5 space-y-1.5">
+      <ul className="mt-1 space-y-1">
         {group.candidates.map((c) => (
-          <li key={c.planned_route_id} className="border-l-2 border-blue-200 pl-2">
-            <div className="flex items-center gap-1.5 text-sm">
-              <span className="text-gray-400">→</span>
-              <span className="font-medium text-gray-800 truncate flex-1">{c.name}</span>
+          <li key={c.planned_route_id} className="rounded-md bg-panel px-2.5 py-2">
+            <div className="flex items-center gap-2 text-sm">
+              <span className="min-w-0 flex-1 truncate font-medium text-fg">{c.name}</span>
               {c.strength === 'weak' && (
-                <span className="shrink-0 text-[10px] uppercase tracking-wide text-gray-500 bg-gray-100 rounded px-1">
-                  weak
+                <span className="shrink-0 rounded-sm bg-raised px-1.5 text-2xs text-muted">
+                  Weak match
                 </span>
               )}
             </div>
-            <div className="text-xs text-gray-500">
-              {formatKm(c.distance_km)} · planned {formatDate(c.created_at)}
-            </div>
-            <div className="text-xs text-gray-600">{c.reasons.join(' · ')}</div>
+            <Metrics
+              className="mt-0.5"
+              items={[formatKm(c.distance_km), `planned ${formatDate(c.created_at)}`]}
+            />
+            <ul className="mt-1 text-xs text-muted">
+              {c.reasons.map((r) => (
+                <li key={r}>{r}</li>
+              ))}
+            </ul>
             {c.other_groups > 0 && (
-              <div className="text-xs text-amber-700">
-                also suggested for {c.other_groups} other route{c.other_groups === 1 ? '' : 's'}
+              <div className="mt-1 text-xs text-warn">
+                Also suggested for {c.other_groups} other route{c.other_groups === 1 ? '' : 's'}
               </div>
             )}
-            <div className="flex justify-end gap-3 mt-1 text-xs">
-              <button
+            <div className="mt-2 flex justify-end gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
                 onClick={() => onDecide('reject', c)}
                 disabled={busy}
-                className="text-gray-500 hover:text-gray-700 disabled:text-gray-300"
               >
                 Reject
-              </button>
-              <button
+              </Button>
+              <Button
+                size="sm"
+                variant="primary"
                 onClick={() => onDecide('accept', c)}
                 disabled={busy}
-                className="text-blue-600 hover:text-blue-800 disabled:text-gray-300 font-medium"
               >
                 Accept
-              </button>
+              </Button>
             </div>
           </li>
         ))}

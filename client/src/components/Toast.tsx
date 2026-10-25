@@ -1,3 +1,4 @@
+import { CircleAlert, CircleCheck, Info, X } from 'lucide-react';
 import {
   createContext,
   useCallback,
@@ -41,32 +42,33 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 
   const api = useMemo(() => ({ show }), [show]);
-  const colors: Record<Kind, string> = {
-    info: 'bg-gray-800',
-    success: 'bg-green-600',
-    error: 'bg-red-600',
+  const icons: Record<Kind, ReactNode> = {
+    info: <Info className="size-4 text-signal" />,
+    success: <CircleCheck className="size-4 text-ok" />,
+    error: <CircleAlert className="size-4 text-danger" />,
   };
 
   return (
     <ToastContext.Provider value={api}>
       {children}
       <div
-        className="fixed bottom-4 right-4 z-[2000] flex flex-col gap-2 max-w-sm"
+        className="fixed right-4 bottom-8 z-[2000] flex max-w-sm flex-col gap-2"
         role="status"
         aria-live="polite"
       >
         {items.map((t) => (
           <div
             key={t.id}
-            className={`${colors[t.kind]} text-white text-sm rounded-lg shadow-lg px-4 py-2 flex items-start gap-3 whitespace-pre-line`}
+            className={`animate-pop-in flex items-start gap-3 rounded-lg border bg-panel py-2.5 pr-2 pl-3 text-sm whitespace-pre-line text-fg shadow-float ${t.kind === 'error' ? 'border-danger/40' : 'border-line'}`}
           >
+            <span className="mt-0.5 shrink-0">{icons[t.kind]}</span>
             <span className="flex-1">{t.message}</span>
             <button
               onClick={() => dismiss(t.id)}
-              className="opacity-70 hover:opacity-100"
+              className="shrink-0 rounded-sm p-0.5 text-faint hover:text-fg"
               aria-label="Dismiss"
             >
-              ×
+              <X className="size-4" />
             </button>
           </div>
         ))}

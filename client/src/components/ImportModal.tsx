@@ -1,10 +1,15 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { FileUp, X } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
 import { errorMessage, importRides, previewRides } from '../api';
 import { BIKE, BIKE_TYPES, type BikeType } from '../domain';
 import { invalidateRideData } from '../queryKeys';
 import { summarizePreview } from './importSummary';
 import { useToast } from './Toast';
+import { Button, IconButton } from './ui/Button';
+import { cx } from './ui/cx';
+import { Dialog } from './ui/Dialog';
+import { Select, Switch } from './ui/fields';
 
 const ACCEPTED = ['.gpx', '.fit'];
 const isAccepted = (f: File) => ACCEPTED.some((ext) => f.name.toLowerCase().endsWith(ext));
@@ -21,12 +26,6 @@ export default function ImportModal({ onClose }: { onClose(): void }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
   const toast = useToast();
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
 
   const addFiles = (list: FileList | File[]) => {
     const incoming = Array.from(list).filter(isAccepted);
@@ -78,196 +77,205 @@ export default function ImportModal({ onClose }: { onClose(): void }) {
     ).length;
   }, [preview, skipNonCycling]);
 
+  const step = !preview ? 1 : doImport.isPending ? 3 : 2;
   return (
-    <div
-      className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1500]"
-      onClick={onClose}
-    >
-      <div
-        className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-label="Import files"
-      >
-        <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-lg font-semibold">Import GPX / FIT files</h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 text-xl"
-            aria-label="Close"
-          >
-            ×
-          </button>
-        </div>
-
-        <div className="p-4 space-y-4 overflow-y-auto flex-1">
-          <p className="text-xs text-gray-500">
-            Rides on Garmin Connect and Hammerhead arrive automatically via the sync. Use this for
-            other sources or old exports.
-          </p>
-          <div
-            onDragOver={(e) => {
-              e.preventDefault();
-              setDragging(true);
-            }}
-            onDragLeave={() => setDragging(false)}
-            onDrop={(e) => {
-              e.preventDefault();
-              setDragging(false);
-              addFiles(e.dataTransfer.files);
-            }}
-            onClick={() => inputRef.current?.click()}
-            className={`border-2 border-dashed rounded-lg p-6 text-center cursor-pointer ${dragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-gray-400'}`}
-          >
-            <p className="font-medium text-gray-600">Drag & drop .gpx or .fit files here</p>
-            <p className="text-sm text-gray-500">or click to browse</p>
-            <input
-              ref={inputRef}
-              type="file"
-              accept={ACCEPTED.join(',')}
-              multiple
-              onChange={(e) => e.target.files && addFiles(e.target.files)}
-              className="hidden"
-            />
-          </div>
-
-          {files.length > 0 && (
-            <div>
-              <div className="flex items-center justify-between mb-1 text-sm">
-                <span className="font-medium text-gray-700">Selected files ({files.length})</span>
-                <button
-                  onClick={() => {
-                    setFiles([]);
-                    setPreview(null);
-                  }}
-                  className="text-xs text-red-500 hover:text-red-700"
-                >
-                  Clear all
-                </button>
-              </div>
-              <ul className="max-h-32 overflow-y-auto space-y-1 text-sm">
-                {files.slice(0, 20).map((f) => (
-                  <li
-                    key={fileKey(f)}
-                    className="flex items-center justify-between bg-gray-50 rounded px-2 py-1"
-                  >
-                    <span className="truncate text-gray-600">{f.name}</span>
-                    <button
-                      onClick={() => {
-                        setFiles((prev) => prev.filter((p) => p !== f));
-                        setPreview(null);
-                      }}
-                      className="text-red-500 hover:text-red-700 ml-2"
-                      aria-label={`Remove ${f.name}`}
-                    >
-                      ×
-                    </button>
-                  </li>
-                ))}
-                {files.length > 20 && (
-                  <li className="text-gray-500 text-xs px-2">… and {files.length - 20} more</li>
-                )}
-              </ul>
-            </div>
-          )}
-
-          {preview && summary && (
-            <div className="border rounded-lg p-3 bg-gray-50 space-y-2 text-sm">
-              <div className="grid grid-cols-3 gap-2">
-                <Metric label="Cycling" value={summary.cycling} className="text-green-600" />
-                <Metric
-                  label="Non-cycling"
-                  value={summary.nonCycling}
-                  className="text-orange-600"
-                />
-                <Metric label="Unknown type" value={summary.unknown} className="text-gray-600" />
-                <Metric
-                  label="Already imported"
-                  value={summary.duplicates}
-                  className="text-red-600"
-                />
-                <Metric label="Unreadable" value={preview.errors.length} className="text-red-600" />
-              </div>
-              {summary.nonCyclingTypes.length > 0 && (
-                <div className="text-orange-700 text-xs">
-                  Non-cycling types: {summary.nonCyclingTypes.join(', ')}
-                </div>
-              )}
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={skipNonCycling}
-                  onChange={(e) => setSkipNonCycling(e.target.checked)}
-                />
-                Skip non-cycling activities
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={useDetected}
-                  onChange={(e) => setUseDetected(e.target.checked)}
-                />
-                Use the bike type detected in the file when available
-              </label>
-              <label className="flex items-center gap-2">
-                {useDetected ? 'Otherwise' : 'Bike type'}:
-                <select
-                  value={fallbackBike}
-                  onChange={(e) => setFallbackBike(e.target.value as BikeType | '')}
-                  className="border rounded px-2 py-1"
-                >
-                  <option value="">Leave unassigned</option>
-                  {BIKE_TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {BIKE[t].label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center justify-end gap-2 p-4 border-t bg-gray-50 rounded-b-xl">
+    <Dialog
+      title="Import GPX and FIT files"
+      onClose={onClose}
+      className="max-w-2xl"
+      footer={
+        <>
           {progress && (
-            <span className="mr-auto text-sm text-gray-500">
+            <span className="tnum mr-auto text-sm text-muted">
               Uploading {progress.done}/{progress.total}…
             </span>
           )}
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
-          >
+          <Button variant="ghost" onClick={onClose}>
             Cancel
-          </button>
+          </Button>
           {!preview ? (
-            <button
+            <Button
+              variant="primary"
               onClick={() => analyze.mutate()}
               disabled={files.length === 0 || analyze.isPending}
-              className="px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-300 text-white rounded-lg"
             >
               {analyze.isPending ? 'Analyzing…' : `Analyze ${files.length} file(s)`}
-            </button>
+            </Button>
           ) : (
-            <button
+            <Button
+              variant="primary"
               onClick={() => doImport.mutate()}
               disabled={toImport === 0 || doImport.isPending}
-              className="px-4 py-2 bg-green-500 hover:bg-green-600 disabled:bg-gray-300 text-white rounded-lg"
             >
               {doImport.isPending ? 'Importing…' : `Import ${toImport} ride(s)`}
-            </button>
+            </Button>
           )}
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <ol className="flex items-center gap-2 text-xs" aria-label="Import steps">
+          {['Choose files', 'Review', 'Import'].map((label, i) => (
+            <li
+              key={label}
+              aria-current={step === i + 1 ? 'step' : undefined}
+              className={cx(
+                'flex items-center gap-2',
+                step === i + 1 ? 'text-fg' : step > i + 1 ? 'text-muted' : 'text-faint'
+              )}
+            >
+              {i > 0 && <span aria-hidden className="h-px w-6 bg-line" />}
+              <span
+                className={cx(
+                  'tnum flex size-5 items-center justify-center rounded-full border text-2xs font-semibold',
+                  step === i + 1 ? 'border-signal text-signal' : 'border-line'
+                )}
+              >
+                {i + 1}
+              </span>
+              {label}
+            </li>
+          ))}
+        </ol>
+
+        <p className="text-xs text-muted">
+          Rides on Garmin Connect and Hammerhead arrive automatically via the sync. Use this for
+          other sources or old exports.
+        </p>
+        <div
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            addFiles(e.dataTransfer.files);
+          }}
+          onClick={() => inputRef.current?.click()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              inputRef.current?.click();
+            }
+          }}
+          role="button"
+          tabIndex={0}
+          aria-label="Choose .gpx or .fit files"
+          className={cx(
+            'flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed px-6 py-8 text-center transition-colors',
+            dragging ? 'border-signal bg-signal/10' : 'border-line hover:border-line-strong'
+          )}
+        >
+          <FileUp aria-hidden className="size-6 text-faint" />
+          <p className="font-medium text-fg">Drag and drop .gpx or .fit files here</p>
+          <p className="text-sm text-muted">or click to browse</p>
+          <input
+            ref={inputRef}
+            type="file"
+            accept={ACCEPTED.join(',')}
+            multiple
+            onChange={(e) => e.target.files && addFiles(e.target.files)}
+            className="hidden"
+          />
         </div>
+
+        {files.length > 0 && (
+          <div>
+            <div className="mb-1.5 flex items-center justify-between text-sm">
+              <span className="font-medium text-fg">
+                Selected files <span className="tnum text-faint">{files.length}</span>
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setFiles([]);
+                  setPreview(null);
+                }}
+              >
+                Clear all
+              </Button>
+            </div>
+            <ul className="max-h-32 space-y-px overflow-y-auto rounded-md border border-line p-1 text-sm">
+              {files.slice(0, 20).map((f) => (
+                <li
+                  key={fileKey(f)}
+                  className="flex items-center justify-between rounded-sm py-0.5 pr-0.5 pl-2 hover:bg-raised"
+                >
+                  <span className="truncate text-muted">{f.name}</span>
+                  <IconButton
+                    label={`Remove ${f.name}`}
+                    onClick={() => {
+                      setFiles((prev) => prev.filter((p) => p !== f));
+                      setPreview(null);
+                    }}
+                    className="size-6"
+                  >
+                    <X className="size-3.5" />
+                  </IconButton>
+                </li>
+              ))}
+              {files.length > 20 && (
+                <li className="px-2 py-0.5 text-xs text-faint">… and {files.length - 20} more</li>
+              )}
+            </ul>
+          </div>
+        )}
+
+        {preview && summary && (
+          <div className="space-y-3 rounded-lg border border-line p-3 text-sm">
+            <div className="grid grid-cols-5 gap-2">
+              <Metric label="Cycling" value={summary.cycling} className="text-ok" />
+              <Metric label="Non-cycling" value={summary.nonCycling} className="text-warn" />
+              <Metric label="Unknown type" value={summary.unknown} className="text-muted" />
+              <Metric label="Already imported" value={summary.duplicates} className="text-muted" />
+              <Metric label="Unreadable" value={preview.errors.length} className="text-danger" />
+            </div>
+            {summary.nonCyclingTypes.length > 0 && (
+              <div className="text-xs text-warn">
+                Non-cycling types: {summary.nonCyclingTypes.join(', ')}
+              </div>
+            )}
+            <Switch
+              label="Skip non-cycling activities"
+              checked={skipNonCycling}
+              onChange={setSkipNonCycling}
+            />
+            <Switch
+              label="Use the bike type detected in the file when available"
+              checked={useDetected}
+              onChange={setUseDetected}
+            />
+            <label className="flex items-center gap-3">
+              <span className="text-muted">{useDetected ? 'Otherwise' : 'Bike type'}</span>
+              <Select
+                value={fallbackBike}
+                onChange={(e) => setFallbackBike(e.target.value as BikeType | '')}
+              >
+                <option value="">Leave unassigned</option>
+                {BIKE_TYPES.map((t) => (
+                  <option key={t} value={t}>
+                    {BIKE[t].label}
+                  </option>
+                ))}
+              </Select>
+            </label>
+          </div>
+        )}
       </div>
-    </div>
+    </Dialog>
   );
 }
 
 function Metric({ label, value, className }: { label: string; value: number; className: string }) {
   return (
-    <div className="bg-white rounded p-2">
-      <div className="text-gray-500 text-xs">{label}</div>
-      <div className={`font-semibold ${className}`}>{value}</div>
+    <div className="rounded-md bg-raised px-2.5 py-2">
+      <div className="text-2xs text-faint">{label}</div>
+      <div className={cx('tnum text-lg font-semibold', value === 0 ? 'text-faint' : className)}>
+        {value}
+      </div>
     </div>
   );
 }

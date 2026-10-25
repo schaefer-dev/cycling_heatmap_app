@@ -1,12 +1,14 @@
 import L from 'leaflet';
-import { useMemo } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { Pane, Polyline } from 'react-leaflet';
 import type { Deviation, LatLngTuple, MapTrack, Section } from '../../api';
-import { bikeColor, RATING_BY_VALUE } from '../../domain';
+import { bikeColor, RATING_BY_VALUE, UNASSIGNED_COLOR } from '../../domain';
+import type { MapTone } from './basemaps';
+import { LINE_COLORS, ROUTE_COLORS } from './colors';
 import { PANES } from './panes';
 
 /** Declares the custom panes; layers using them must be rendered inside. */
-export function MapPanes({ children }: { children: React.ReactNode }) {
+export function MapPanes({ children }: { children: ReactNode }) {
   return (
     <>
       {Object.values(PANES).map((p) => (
@@ -44,11 +46,14 @@ export function RouteLayer({
   rides,
   reference,
   dimmed,
+  tone,
 }: {
   rides: Array<{ id: string; track: LatLngTuple[] }>;
   reference: LatLngTuple[] | null;
   dimmed: boolean;
+  tone: MapTone;
 }) {
+  const colors = ROUTE_COLORS[tone];
   const renderer = useMemo(() => L.canvas({ pane: PANES.route.name }), []);
   return (
     <>
@@ -57,7 +62,7 @@ export function RouteLayer({
           key={r.id}
           positions={r.track}
           pane={PANES.route.name}
-          pathOptions={{ color: '#7c3aed', weight: 2, opacity: dimmed ? 0.25 : 0.45 }}
+          pathOptions={{ color: colors.rides, weight: 2, opacity: dimmed ? 0.3 : 0.5 }}
           interactive={false}
           renderer={renderer}
         />
@@ -66,7 +71,7 @@ export function RouteLayer({
         <Polyline
           positions={reference}
           pane={PANES.route.name}
-          pathOptions={{ color: '#5b21b6', weight: 4, opacity: 0.9 }}
+          pathOptions={{ color: colors.reference, weight: 4, opacity: 0.95 }}
           interactive={false}
           renderer={renderer}
         />
@@ -75,6 +80,7 @@ export function RouteLayer({
   );
 }
 
+/** The selected ride: a white line (the logo's road stroke) on a navy casing, readable on any map. */
 export function SelectedRideLayer({ track }: { track: LatLngTuple[] }) {
   return (
     <>
@@ -82,9 +88,9 @@ export function SelectedRideLayer({ track }: { track: LatLngTuple[] }) {
         positions={track}
         pane={PANES.ride.name}
         pathOptions={{
-          color: '#ffffff',
-          weight: 10,
-          opacity: 0.8,
+          color: LINE_COLORS.rideCasing,
+          weight: 9,
+          opacity: 0.9,
           lineCap: 'round',
           lineJoin: 'round',
         }}
@@ -94,8 +100,8 @@ export function SelectedRideLayer({ track }: { track: LatLngTuple[] }) {
         positions={track}
         pane={PANES.ride.name}
         pathOptions={{
-          color: '#2563eb',
-          weight: 5,
+          color: LINE_COLORS.ride,
+          weight: 4,
           opacity: 1,
           lineCap: 'round',
           lineJoin: 'round',
@@ -115,7 +121,7 @@ export function DeviationLayer({ deviation }: { deviation: Deviation }) {
           key={`s${i}`}
           positions={run}
           pane={PANES.deviation.name}
-          pathOptions={{ color: '#dc2626', weight: 4, opacity: 0.9, dashArray: '6 8' }}
+          pathOptions={{ color: LINE_COLORS.skipped, weight: 4, opacity: 0.95, dashArray: '6 8' }}
           interactive={false}
         />
       ))}
@@ -124,7 +130,7 @@ export function DeviationLayer({ deviation }: { deviation: Deviation }) {
           key={`d${i}`}
           positions={run}
           pane={PANES.deviation.name}
-          pathOptions={{ color: '#f97316', weight: 6, opacity: 1, lineCap: 'round' }}
+          pathOptions={{ color: LINE_COLORS.detour, weight: 6, opacity: 1, lineCap: 'round' }}
           interactive={false}
         />
       ))}
@@ -154,7 +160,7 @@ export function SectionsLayer({
           }
           pane={PANES.sections.name}
           pathOptions={{
-            color: RATING_BY_VALUE[s.rating]?.color ?? '#888',
+            color: RATING_BY_VALUE[s.rating]?.color ?? UNASSIGNED_COLOR,
             weight: selectedId === s.id ? 8 : 6,
             opacity: selectedId === s.id ? 1 : 0.8,
           }}

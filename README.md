@@ -57,7 +57,11 @@ cloud account or subscription, and a Raspberry Pi is enough to run it.
 **Map**
 
 - **Heatmap** of everything you've ridden, filterable by bike type (road, gravel, MTB).
+- **Map styles**: dark (default), muted light or the standard OpenStreetMap map. The muted styles
+  make even roads you rode once stand out in the heatmap.
 - **All tracks** view, and per-route view with the reference track and every ride on it.
+- **Ride details**: distance, time, climb and speed, an elevation profile that marks the hovered
+  point on the map, and the devices that recorded the ride.
 - **"Who rode here?"**: click any spot to list every ride that passed it, with first and last
   date.
 - **Section ratings**: mark road or trail sections (5 levels, surface tags such as gravel, mud or
@@ -68,11 +72,11 @@ cloud account or subscription, and a Raspberry Pi is enough to run it.
 <table>
   <tr>
     <td width="50%"><img src="assets/screenshots/heatmap.webp" alt="Heatmap of all rides with the route list" /></td>
-    <td width="50%"><img src="assets/screenshots/route-detail.webp" alt="A route with its reference track and all rides on it" /></td>
+    <td width="50%"><img src="assets/screenshots/route-detail.webp" alt="A route with its rides, one selected ride and its elevation profile" /></td>
   </tr>
   <tr>
-    <td align="center"><sub><b>Heatmap</b>: all rides, routes ranked by last ride</sub></td>
-    <td align="center"><sub><b>Route detail</b>: 16 rides of the same loop, both directions</sub></td>
+    <td align="center"><sub><b>Heatmap</b>: all rides on the dark map, routes ranked by last ride</sub></td>
+    <td align="center"><sub><b>Route detail</b>: 16 rides of one loop, one of them with its elevation profile</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src="assets/screenshots/rides-here.webp" alt="Popup listing all rides that passed a clicked location" /></td>
@@ -80,7 +84,7 @@ cloud account or subscription, and a Raspberry Pi is enough to run it.
   </tr>
   <tr>
     <td align="center"><sub><b>Who rode here?</b>: 74 rides through one spot</sub></td>
-    <td align="center"><sub><b>All tracks</b>: every ride, coloured by bike type</sub></td>
+    <td align="center"><sub><b>All tracks</b>: every ride, coloured by bike type, on the muted light map</sub></td>
   </tr>
 </table>
 
@@ -220,9 +224,9 @@ flowchart LR
   migrations, and the original FIT files in `fit/` so rides can be re-processed later.
 - To back up while the server is running, use
   `sqlite3 data/cycling_archive.db ".backup backup.db"` (copying the file can miss recent writes).
-- Ridestack only talks to the services you configure (Garmin, Hammerhead), OpenStreetMap for map
-  tiles, and Nominatim for route names (disable with `GEOCODER_ENABLED=false`). Nothing else is
-  sent anywhere.
+- Ridestack only talks to the services you configure (Garmin, Hammerhead), the map tile servers
+  (Esri for the dark and muted light styles, OpenStreetMap for the standard one), and Nominatim for
+  route names (disable with `GEOCODER_ENABLED=false`). Nothing else is sent anywhere.
 
 ## Commands
 
@@ -280,7 +284,9 @@ modified version as a network service, you must make its source code available t
 
 **Acknowledgements:** [Leaflet](https://leafletjs.com) and
 [Leaflet.heat](https://github.com/Leaflet/Leaflet.heat), map data ©
-[OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, the
+[OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, base maps by
+[Esri](https://www.esri.com), [Lucide](https://lucide.dev) icons, the
+[Overpass](https://overpassfont.org) typeface, the
 [Garmin FIT SDK](https://developer.garmin.com/fit/), and routing by
 [OSRM](https://project-osrm.org) and elevation by [Open-Meteo](https://open-meteo.com) for the demo
 dataset.

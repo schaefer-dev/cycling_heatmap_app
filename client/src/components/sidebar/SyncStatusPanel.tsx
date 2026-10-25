@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useRef } from 'react';
+import { RefreshCw } from 'lucide-react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import {
   HAMMERHEAD_CONNECT_URL,
   errorMessage,
@@ -8,28 +9,41 @@ import {
   type ProviderSyncStatus,
   type SyncProvider,
   type SyncRun,
+  type SyncStatus,
 } from '../../api';
 import { formatRelative } from '../../format';
 import { invalidateRideData, qk } from '../../queryKeys';
 import { useToast } from '../Toast';
+import { cx } from '../ui/cx';
+import { needsLogin, providerState, STATE_DOT } from './syncState';
 
 const LABEL: Record<SyncProvider, string> = { garmin: 'Garmin', hammerhead: 'Hammerhead' };
 
 const CONNECT_RESULT: Record<string, { message: string; kind: 'success' | 'error' | 'info' }> = {
-  connected: { message: 'Hammerhead connected — rides arrive with the next sync', kind: 'success' },
+  connected: { message: 'Hammerhead connected. Rides arrive with the next sync.', kind: 'success' },
   denied: { message: 'Hammerhead connection cancelled', kind: 'info' },
-  error: { message: 'Connecting Hammerhead failed — see the server log', kind: 'error' },
+  error: { message: 'Connecting Hammerhead failed. See the server log.', kind: 'error' },
 };
 
-/** Garmin + Hammerhead sync state and "Sync now". Polls fast while a sync runs, slowly otherwise. */
-export default function SyncStatusPanel() {
-  const toast = useToast();
-  const { data: status } = useQuery({
+/** Sync status, polled fast while a sync runs and slowly otherwise. Shared by all observers. */
+function useSyncStatus(): SyncStatus | undefined {
+  return useQuery({
     queryKey: qk.syncStatus(),
     queryFn: getSyncStatus,
     refetchInterval: (q) =>
       q.state.data?.garmin.running || q.state.data?.hammerhead.running ? 3000 : 60_000,
-  });
+  }).data;
+}
+
+/**
+ * Side effects of syncing, mounted once for the whole app: reports the Hammerhead OAuth result and,
+ * when a run finishes (also scheduled ones), refreshes all ride data and reports what happened.
+ */
+// eslint-disable-next-line react-refresh/only-export-components
+export function useSyncWatcher(): SyncStatus | undefined {
+  const status = useSyncStatus();
+  const toast = useToast();
+  const queryClient = useQueryClient();
 
   // Result of the Hammerhead OAuth redirect (/?hammerhead=connected): report once, clean the URL.
   const reportedConnect = useRef(false);
@@ -44,15 +58,58 @@ export default function SyncStatusPanel() {
     window.history.replaceState(null, '', url);
   }, [toast]);
 
+  const lastSeen = useRef<Record<SyncProvider, number | null>>({ garmin: null, hammerhead: null });
+  const garminRun = status?.garmin.last_run;
+  const hammerheadRun = status?.hammerhead.last_run;
+  useEffect(() => {
+    const runs: Array<[SyncProvider, SyncRun | null | undefined]> = [
+      ['garmin', garminRun],
+      ['hammerhead', hammerheadRun],
+    ];
+    for (const [provider, run] of runs) {
+      if (!run || run.status === 'running') continue;
+      const seen = lastSeen.current[provider];
+      if (seen !== null && run.id !== seen) {
+        void invalidateRideData(queryClient);
+        const msg = describeRun(LABEL[provider], run);
+        if (msg) toast.show(msg, run.status === 'error' ? 'error' : 'success');
+      }
+      lastSeen.current[provider] = run.id;
+    }
+  }, [garminRun, hammerheadRun, queryClient, toast]);
+
+  return status;
+}
+
+/**
+ * Garmin + Hammerhead sync state with "Sync now" / connect actions. `only="problems"` lists just
+ * the providers whose last run failed or whose login expired (for an inline alert).
+ */
+export default function SyncStatusPanel({ only }: { only?: 'problems' } = {}) {
+  const status = useSyncStatus();
   if (!status) return null;
+  const rows: Array<{ provider: SyncProvider; status: ProviderSyncStatus; connected: boolean }> = [
+    { provider: 'garmin', status: status.garmin, connected: true },
+    { provider: 'hammerhead', status: status.hammerhead, connected: status.hammerhead.connected },
+  ];
+  const visible =
+    only === 'problems'
+      ? rows.filter(
+          (r) => r.status.configured && r.connected && providerState(r.status) === 'failed'
+        )
+      : rows;
+  if (visible.length === 0) return null;
   return (
-    <div className="flex flex-col gap-1">
-      <ProviderRow provider="garmin" status={status.garmin} />
-      <ProviderRow
-        provider="hammerhead"
-        status={status.hammerhead}
-        connected={status.hammerhead.connected}
-      />
+    <div className={cx('flex flex-col', only === 'problems' ? 'gap-1.5' : 'divide-y divide-line')}>
+      {visible.map((r) => (
+        <ProviderRow
+          key={r.provider}
+          provider={r.provider}
+          status={r.status}
+          connected={r.connected}
+          alert={only === 'problems'}
+        />
+      ))}
     </div>
   );
 }
@@ -60,28 +117,18 @@ export default function SyncStatusPanel() {
 function ProviderRow({
   provider,
   status,
-  connected = true,
+  connected,
+  alert,
 }: {
   provider: SyncProvider;
   status: ProviderSyncStatus;
-  connected?: boolean;
+  connected: boolean;
+  alert: boolean;
 }) {
   const queryClient = useQueryClient();
   const toast = useToast();
   const label = LABEL[provider];
-
-  // When a run finishes (also scheduled ones), refresh everything and report new rides.
-  const lastSeenRun = useRef<number | null>(null);
-  useEffect(() => {
-    const run = status.last_run;
-    if (!run || run.status === 'running') return;
-    if (lastSeenRun.current !== null && run.id !== lastSeenRun.current) {
-      void invalidateRideData(queryClient);
-      const msg = describeRun(label, run);
-      if (msg) toast.show(msg, run.status === 'error' ? 'error' : 'success');
-    }
-    lastSeenRun.current = run.id;
-  }, [status.last_run, queryClient, toast, label]);
+  const state = providerState(status, connected);
 
   const sync = useMutation({
     mutationFn: () => startSync(provider),
@@ -89,52 +136,46 @@ function ProviderRow({
     onError: (e) => toast.show(errorMessage(e), 'error'),
   });
 
-  if (!status.configured) {
-    return (
-      <div className="text-xs text-gray-500 bg-gray-50 rounded px-2 py-1">
-        {label} sync off — set{' '}
-        {provider === 'garmin' ? (
-          <code>GARMIN_API_KEY</code>
-        ) : (
-          <>
-            <code>HAMMERHEAD_CLIENT_ID</code> / <code>HAMMERHEAD_CLIENT_SECRET</code>
-          </>
-        )}{' '}
-        in <code>.env</code>
-      </div>
-    );
-  }
-
-  const failed = status.last_run?.status === 'error';
-  const needsLogin =
-    !connected || (failed && /connect hammerhead again/i.test(status.last_run?.error ?? ''));
   const connectLink = (text: string) => (
     <a
       href={HAMMERHEAD_CONNECT_URL}
-      className="shrink-0 text-blue-600 hover:text-blue-800 font-medium"
+      className="shrink-0 rounded-md border border-line bg-raised px-2.5 py-1 text-xs font-medium text-fg hover:border-line-strong hover:bg-active"
     >
       {text}
     </a>
   );
 
-  if (!connected) {
-    return (
-      <div className="text-xs rounded px-2 py-1.5 flex items-center gap-2 bg-gray-50 text-gray-600">
-        <span className="flex-1 min-w-0">{label} not connected</span>
-        {connectLink('Connect Hammerhead')}
-      </div>
+  let text: ReactNode;
+  let action: ReactNode = null;
+  if (!status.configured) {
+    text = (
+      <span className="text-muted">
+        {label} sync off. Set{' '}
+        {provider === 'garmin' ? (
+          <code className="text-fg">GARMIN_API_KEY</code>
+        ) : (
+          <>
+            <code className="text-fg">HAMMERHEAD_CLIENT_ID</code> and{' '}
+            <code className="text-fg">HAMMERHEAD_CLIENT_SECRET</code>
+          </>
+        )}{' '}
+        in <code className="text-fg">.env</code> to turn it on.
+      </span>
     );
-  }
-
-  return (
-    <div
-      className={`text-xs rounded px-2 py-1.5 flex items-center gap-2 ${failed ? 'bg-red-50 text-red-700' : 'bg-gray-50 text-gray-600'}`}
-    >
-      <span className="flex-1 min-w-0" title={status.last_run?.error ?? undefined}>
+  } else if (!connected) {
+    text = <span className="text-muted">{label} not connected</span>;
+    action = connectLink('Connect Hammerhead');
+  } else {
+    const failed = state === 'failed';
+    text = (
+      <span
+        className={cx('min-w-0', failed ? 'text-danger' : 'text-muted')}
+        title={status.last_run?.error ?? undefined}
+      >
         {status.running ? (
-          <span className="text-blue-600">Syncing with {label}…</span>
+          <span className="text-signal">Syncing with {label}…</span>
         ) : failed ? (
-          <span className="block truncate">
+          <span className={alert ? 'line-clamp-2' : 'block'}>
             {label} sync failed: {status.last_run?.error}
           </span>
         ) : status.last_success_at ? (
@@ -145,17 +186,31 @@ function ProviderRow({
           <>{label} not synced yet</>
         )}
       </span>
-      {needsLogin ? (
-        connectLink('Reconnect')
-      ) : (
-        <button
-          onClick={() => sync.mutate()}
-          disabled={status.running || sync.isPending}
-          className="shrink-0 text-blue-600 hover:text-blue-800 disabled:text-gray-400 font-medium"
-        >
-          Sync now
-        </button>
+    );
+    action = needsLogin(status, connected) ? (
+      connectLink('Reconnect')
+    ) : (
+      <button
+        onClick={() => sync.mutate()}
+        disabled={status.running || sync.isPending}
+        className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-line bg-raised px-2.5 py-1 text-xs font-medium text-fg hover:border-line-strong hover:bg-active disabled:cursor-not-allowed disabled:text-faint disabled:hover:bg-raised"
+      >
+        <RefreshCw aria-hidden className={cx('size-3', status.running && 'animate-spin')} />
+        Sync now
+      </button>
+    );
+  }
+
+  return (
+    <div
+      className={cx(
+        'flex items-center gap-3 text-xs',
+        alert ? 'rounded-md border border-danger/30 bg-danger/10 px-3 py-2' : 'py-2.5'
       )}
+    >
+      <span aria-hidden className={cx('size-2 shrink-0 rounded-full', STATE_DOT[state])} />
+      <span className="min-w-0 flex-1">{text}</span>
+      {action}
     </div>
   );
 }
