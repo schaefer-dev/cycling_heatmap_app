@@ -36,3 +36,4 @@ docs/
 
 # personal gpx examples
 sample_gpx/
+.env
