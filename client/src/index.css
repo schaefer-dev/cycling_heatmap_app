@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 /* Leaflet container must have explicit height */
 .leaflet-container {
@@ -7,7 +7,9 @@
 }
 
 /* Ensure body takes full height */
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
   margin: 0;
   padding: 0;
@@ -32,15 +34,7 @@ html, body, #root {
   background: #555;
 }
 
-/* Rating colors */
-.rating-excellent { color: #22c55e; }
-.rating-good { color: #84cc16; }
-.rating-challenging { color: #eab308; }
-.rating-hard { color: #f97316; }
-.rating-unridable { color: #ef4444; }
-
-.bg-rating-excellent { background-color: #22c55e; }
-.bg-rating-good { background-color: #84cc16; }
-.bg-rating-challenging { background-color: #eab308; }
-.bg-rating-hard { background-color: #f97316; }
-.bg-rating-unridable { background-color: #ef4444; }
+/* The heatmap canvas must never swallow clicks meant for the map. */
+.leaflet-heatmap-layer {
+  pointer-events: none;
+}

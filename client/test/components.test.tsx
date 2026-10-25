@@ -1,0 +1,198 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import type { ReactNode } from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { Ride, RouteDetail, RouteSummary, SyncStatus } from '../src/api';
+import RoutesTab from '../src/components/sidebar/RoutesTab';
+import SyncStatusPanel from '../src/components/sidebar/SyncStatusPanel';
+import { ToastProvider } from '../src/components/Toast';
+
+vi.mock('../src/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../src/api')>()),
+  getRoutes: vi.fn(),
+  getRoute: vi.fn(),
+  renameRoute: vi.fn(),
+  mergeRoutes: vi.fn(),
+  moveRideToRoute: vi.fn(),
+  getSyncStatus: vi.fn(),
+  startGarminSync: vi.fn(),
+}));
+const api = await import('../src/api');
+
+function wrapper({ children }: { children: ReactNode }) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return (
+    <QueryClientProvider client={client}>
+      <ToastProvider>{children}</ToastProvider>
+    </QueryClientProvider>
+  );
+}
+
+const summary = (over: Partial<RouteSummary>): RouteSummary => ({
+  id: 'r1',
+  name: 'Waldrunde',
+  name_source: 'title',
+  reference_ride_id: 'ride-1',
+  ride_count: 3,
+  first_ridden: '2023-04-01',
+  last_ridden: '2025-06-01T08:00:00.000Z',
+  avg_distance_km: 64.2,
+  avg_elevation_gain_m: 420,
+  bike_types: 'gravel',
+  length_m: 64000,
+  ...over,
+});
+
+const ride = (over: Partial<Ride>): Ride => ({
+  id: 'ride-1',
+  title: 'Waldrunde #1',
+  date: '2025-06-01',
+  start_time: '2025-06-01T08:00:00.000Z',
+  bike_type: 'gravel',
+  bike_type_source: 'auto',
+  distance_km: 64.2,
+  elevation_gain_m: 420,
+  duration_s: 9000,
+  moving_time_s: 8400,
+  notes: null,
+  source: 'garmin',
+  activity_type: 'gravel_cycling',
+  garmin_activity_id: 1,
+  route_id: 'r1',
+  route_similarity: 1,
+  route_direction: 'forward',
+  route_assignment: 'auto',
+  created_at: '2025-06-01',
+  ...over,
+});
+
+describe('RoutesTab', () => {
+  beforeEach(() => {
+    vi.mocked(api.getRoutes).mockResolvedValue([
+      summary({}),
+      summary({
+        id: 'r2',
+        name: 'Seerunde',
+        ride_count: 1,
+        last_ridden: '2025-07-01T08:00:00.000Z',
+        bike_types: 'road',
+      }),
+    ]);
+    const detail: RouteDetail = {
+      ...summary({}),
+      reference_track: [],
+      rides: [
+        ride({}),
+        ride({
+          id: 'ride-2',
+          date: '2024-05-01',
+          route_similarity: 0.93,
+          route_direction: 'reverse',
+        }),
+      ],
+    };
+    vi.mocked(api.getRoute).mockResolvedValue(detail);
+    vi.mocked(api.renameRoute).mockResolvedValue(summary({ name: 'Hausrunde' }));
+  });
+
+  function setup(onSelectRoute = vi.fn(), routeId: string | null = null) {
+    render(
+      <RoutesTab
+        bikeFilter={null}
+        selection={{ routeId, rideId: null }}
+        onSelectRoute={onSelectRoute}
+        onSelectRide={vi.fn()}
+      />,
+      { wrapper }
+    );
+    return onSelectRoute;
+  }
+
+  it('lists routes (most recent first) and filters repeated ones', async () => {
+    setup();
+    const cards = await screen.findAllByRole('button', { expanded: false });
+    expect(cards.map((c) => within(c).getByText(/runde/).textContent)).toEqual([
+      'Seerunde',
+      'Waldrunde',
+    ]);
+    expect(screen.getByText('3×')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByLabelText('Ridden more than once'));
+    expect(screen.queryByText('Seerunde')).not.toBeInTheDocument();
+  });
+
+  it('selects a route when its card is clicked', async () => {
+    const onSelect = setup();
+    await userEvent.click(await screen.findByText('Waldrunde'));
+    expect(onSelect).toHaveBeenCalledWith('r1');
+  });
+
+  it('shows every ride of the selected route with direction and match', async () => {
+    setup(vi.fn(), 'r1');
+    expect(await screen.findByText('Sun, 1 Jun 2025')).toBeInTheDocument();
+    expect(screen.getByText('Wed, 1 May 2024')).toBeInTheDocument();
+    expect(screen.getByText('93%')).toHaveClass('text-orange-600');
+    expect(screen.getByTitle('Ridden in reverse direction')).toBeInTheDocument();
+    expect(screen.getByText('ref')).toBeInTheDocument();
+  });
+
+  it('renames a route', async () => {
+    setup(vi.fn(), 'r1');
+    await userEvent.click(await screen.findByText('Rename'));
+    const input = screen.getByLabelText('Route name');
+    await userEvent.clear(input);
+    await userEvent.type(input, 'Hausrunde{Enter}');
+    expect(api.renameRoute).toHaveBeenCalledWith('r1', 'Hausrunde');
+  });
+});
+
+describe('SyncStatusPanel', () => {
+  const status = (over: Partial<SyncStatus>): SyncStatus => ({
+    configured: true,
+    running: false,
+    next_run_at: null,
+    last_run: null,
+    last_success_at: null,
+    recent_runs: [],
+    activities: {},
+    ...over,
+  });
+
+  it('explains how to enable sync when no API key is set', async () => {
+    vi.mocked(api.getSyncStatus).mockResolvedValue(status({ configured: false }));
+    render(<SyncStatusPanel />, { wrapper });
+    expect(await screen.findByText(/Garmin sync off/)).toBeInTheDocument();
+  });
+
+  it('shows failures (e.g. an expired key) and offers Sync now', async () => {
+    vi.mocked(api.getSyncStatus).mockResolvedValue(
+      status({
+        last_run: {
+          id: 1,
+          started_at: '',
+          finished_at: '',
+          mode: 'incremental',
+          status: 'error',
+          imported: 0,
+          linked: 0,
+          skipped: 0,
+          failed: 0,
+          error: 'Garmin rejected the API key',
+        },
+      })
+    );
+    vi.mocked(api.startGarminSync).mockResolvedValue({ started: true });
+    render(<SyncStatusPanel />, { wrapper });
+    expect(await screen.findByText(/Garmin rejected the API key/)).toBeInTheDocument();
+    await userEvent.click(screen.getByText('Sync now'));
+    expect(api.startGarminSync).toHaveBeenCalled();
+  });
+
+  it('disables Sync now while a sync runs', async () => {
+    vi.mocked(api.getSyncStatus).mockResolvedValue(status({ running: true }));
+    render(<SyncStatusPanel />, { wrapper });
+    expect(await screen.findByText(/Syncing with Garmin/)).toBeInTheDocument();
+    expect(screen.getByText('Sync now')).toBeDisabled();
+  });
+});

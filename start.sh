@@ -1,52 +1,28 @@
-#!/bin/bash
-
-# Cycling Archive - Start Script
-# Starts the server and opens the app in your browser
-
+#!/usr/bin/env bash
+# Starts API + web UI (dev mode) and stops both on Ctrl+C. Works on macOS and Linux (Raspberry Pi).
+set -euo pipefail
 cd "$(dirname "$0")"
 
-echo "Stopping any existing server..."
-pkill -f "node server/src/index.js" 2>/dev/null
-pkill -f "vite" 2>/dev/null
-sleep 1
-
-echo "Starting server..."
-node server/src/index.js &
-SERVER_PID=$!
-
-echo "Starting frontend..."
-cd client && npm run dev &
-FRONTEND_PID=$!
-cd ..
-
-# Wait for servers to be ready
-echo "Waiting for servers to start..."
-sleep 3
-
-# Check if servers are running
-if curl -s http://localhost:3001/api/health > /dev/null 2>&1; then
-    echo "Backend ready on http://localhost:3001"
-else
-    echo "Warning: Backend may not be ready yet"
+if [ ! -d node_modules ]; then
+  echo "Installing dependencies..."
+  npm ci
 fi
 
-if curl -s http://localhost:5173 > /dev/null 2>&1; then
-    echo "Frontend ready on http://localhost:5173"
-else
-    echo "Warning: Frontend may not be ready yet"
-fi
+npm run dev &
+DEV_PID=$!
+trap 'kill "$DEV_PID" 2>/dev/null || true' EXIT INT TERM
 
-echo ""
-echo "Opening browser..."
-open http://localhost:5173
+echo "Waiting for the app..."
+for _ in $(seq 1 60); do
+  if curl -sf http://localhost:3001/api/health >/dev/null && curl -sf http://localhost:5173 >/dev/null; then
+    echo "Ready: http://localhost:5173"
+    # Open a browser when there is a desktop (skipped on a headless Pi).
+    if command -v open >/dev/null; then open http://localhost:5173
+    elif [ -n "${DISPLAY:-}" ] && command -v xdg-open >/dev/null; then xdg-open http://localhost:5173
+    fi
+    break
+  fi
+  sleep 1
+done
 
-echo ""
-echo "Cycling Archive is running!"
-echo "  - Frontend: http://localhost:5173"
-echo "  - Backend:  http://localhost:3001"
-echo ""
-echo "Press Ctrl+C to stop all servers"
-
-# Wait for user interrupt
-trap "echo 'Shutting down...'; kill $SERVER_PID $FRONTEND_PID 2>/dev/null; exit 0" INT
-wait
+wait "$DEV_PID"
