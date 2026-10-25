@@ -7,17 +7,20 @@
  * Every activity seen gets a row in garmin_activities (imported / linked / skipped / failed), so
  * nothing is downloaded twice and one broken file never blocks the sync. Rides that were imported
  * earlier from GPX exports are *linked* (Garmin id + devices added; title, bike type and track kept)
- * instead of being imported a second time.
+ * instead of being imported a second time. The bike type comes from the activity type; only generic
+ * "cycling" rides are classified by their paired sensors (bikeSensors.ts).
  */
 import fs from 'node:fs';
 import path from 'node:path';
 import type { DB } from '../db/connection.ts';
 import { stmt } from '../db/stmt.ts';
+import type { BikeType } from '../domain.ts';
 import { ConflictError } from '../errors.ts';
 import { logger } from '../logger.ts';
 import type { RouteService } from '../matching/routeService.ts';
 import { extractFitFromZip, parseFit } from '../parsers/fit.ts';
 import type { ParsedActivity } from '../parsers/parsedActivity.ts';
+import { NO_BIKE_SENSORS, resolveBikeType, type BikeSensorConfig } from '../rides/bikeSensors.ts';
 import type { RideImporter } from '../rides/importService.ts';
 import * as rides from '../rides/repo.ts';
 import {
@@ -52,6 +55,8 @@ export interface GarminSyncDeps {
   routes: RouteService;
   /** Raw FIT files are kept here (data/fit/<activityId>.fit) for reprocessing later. */
   fitDir: string;
+  /** Sensor → bike rules; none by default. */
+  bikeSensors?: BikeSensorConfig;
 }
 
 export class GarminSync {
@@ -192,7 +197,7 @@ export class GarminSync {
           return;
         }
         const parsed = await this.#download(a.activityId);
-        this.#link(existing, a, decision.bikeType, parsed, summary);
+        this.#link(existing, a, this.#bikeType(parsed, decision.bikeType), parsed, summary);
         return;
       }
 
@@ -207,15 +212,16 @@ export class GarminSync {
         this.#record(a, 'skipped', 'no GPS data', null);
         return;
       }
+      const bikeType = this.#bikeType(parsed, decision.bikeType);
       const result = this.#deps.importer.import(parsed, {
         source: 'garmin',
-        bikeType: decision.bikeType,
+        bikeType,
         garminActivityId: a.activityId,
         title: a.activityName,
         activityType: a.activityType.typeKey,
       });
       if (result.status === 'duplicate') {
-        this.#link(result.existing, a, decision.bikeType, parsed, summary);
+        this.#link(result.existing, a, bikeType, parsed, summary);
       } else {
         summary.imported++;
         this.#record(a, 'imported', null, result.ride.id);
@@ -227,6 +233,11 @@ export class GarminSync {
       logger.warn(`Garmin activity ${a.activityId} failed: ${message}`);
       if (!dryRun) this.#record(a, 'failed', message, null);
     }
+  }
+
+  #bikeType(parsed: ParsedActivity, fromActivityType: BikeType | null): BikeType | null {
+    const config = this.#deps.bikeSensors ?? NO_BIKE_SENSORS;
+    return resolveBikeType('garmin', parsed.devices, fromActivityType, config)?.bikeType ?? null;
   }
 
   async #download(activityId: number): Promise<ParsedActivity> {

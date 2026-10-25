@@ -367,3 +367,12 @@ export function listDevices(db: DB, rideId: string) {
        serial_number, ant_device_number FROM ride_devices WHERE ride_id = ? ORDER BY id`
   ).all(rideId);
 }
+
+export function loadDevices(db: DB, rideId: string): RideDevice[] {
+  return stmt(
+    db,
+    `SELECT device_index AS deviceIndex, device_type AS deviceType, source_type AS sourceType,
+       manufacturer, product, product_name AS productName, serial_number AS serialNumber,
+       ant_device_number AS antDeviceNumber FROM ride_devices WHERE ride_id = ? ORDER BY id`
+  ).all(rideId) as RideDevice[];
+}

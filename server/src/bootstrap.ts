@@ -10,6 +10,7 @@ import { HammerheadSync } from './hammerhead/sync.ts';
 import { logger } from './logger.ts';
 import { createNominatimGeocoder, nullGeocoder } from './matching/geocoder.ts';
 import { RouteService } from './matching/routeService.ts';
+import { loadBikeSensorConfig } from './rides/bikeSensors.ts';
 import { RideImporter, ensureDerivedData } from './rides/importService.ts';
 import { closeStaleRuns } from './sync/runs.ts';
 
@@ -37,6 +38,8 @@ export async function bootstrap(config: Config): Promise<Services> {
     : nullGeocoder;
   const routes = new RouteService(db, geocoder, config.matching);
   const importer = new RideImporter(db, routes, config.timeZone);
+  const bikeSensors = loadBikeSensorConfig(config.bikeSensorsPath);
+  if (bikeSensors.rules.length) logger.info(`Bike sensors: ${bikeSensors.rules.length} rule(s)`);
 
   const derived = ensureDerivedData(db, routes);
   if (derived.geometry || derived.routed) {
@@ -50,6 +53,7 @@ export async function bootstrap(config: Config): Promise<Services> {
         importer,
         routes,
         fitDir: config.fitDir,
+        bikeSensors,
       })
     : null;
   if (!garminSync) logger.warn('GARMIN_API_KEY not set: Garmin sync disabled');
@@ -67,6 +71,7 @@ export async function bootstrap(config: Config): Promise<Services> {
       importer,
       routes,
       fitDir: config.fitDir,
+      bikeSensors,
     });
     if (!hammerheadSync.isConnected()) {
       logger.info('Hammerhead not connected yet: use "Connect Hammerhead" in the UI');

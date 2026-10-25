@@ -47,6 +47,8 @@ export interface Config {
   dbPath: string;
   backupDir: string;
   fitDir: string;
+  /** Sensor → bike rules (optional file, see bike-sensors.example.json). */
+  bikeSensorsPath: string;
   timeZone: string;
   garmin: { apiKey: string | undefined; baseUrl: string; syncIntervalMin: number };
   /** null when HAMMERHEAD_CLIENT_ID / HAMMERHEAD_CLIENT_SECRET are not both set. */
@@ -78,6 +80,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       : path.join(dataDir, 'cycling_archive.db'),
     backupDir: path.join(dataDir, 'backups'),
     fitDir: path.join(dataDir, 'fit'),
+    bikeSensorsPath: path.join(dataDir, 'bike-sensors.json'),
     timeZone: e.TZ_NAME ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
     garmin: {
       apiKey: e.GARMIN_API_KEY,

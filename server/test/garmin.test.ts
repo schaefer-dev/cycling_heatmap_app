@@ -12,6 +12,7 @@ import { GarminSync } from '../src/garmin/sync.ts';
 import { lastSyncRuns as lastRuns } from '../src/sync/runs.ts';
 import { listDevices, listRides } from '../src/rides/repo.ts';
 import { buildFit, zipFit } from './helpers/fit.ts';
+import type { BikeSensorConfig } from '../src/rides/bikeSensors.ts';
 import { testContext } from './helpers/context.ts';
 import { LOOP, LOOP_PARTIAL, ride, toGpx, type XY } from './helpers/tracks.ts';
 import { parseGpx } from '../src/parsers/gpx.ts';
@@ -109,6 +110,19 @@ describe('Garmin client', () => {
 // ---- sync -----------------------------------------------------------------------------------
 
 const DAY = 86_400_000;
+/** Matches the quarq power meter written by buildFit({ withSensors: true }). */
+const GRAVEL_QUARQ: BikeSensorConfig = {
+  defaultBikeType: 'road',
+  rules: [
+    {
+      bikeType: 'gravel',
+      name: 'Gravel / power',
+      deviceType: 'bikePower',
+      manufacturer: 'quarq',
+      antIds: [4242],
+    },
+  ],
+};
 const T0 = Date.UTC(2026, 4, 1, 6);
 
 interface FakeActivity {
@@ -122,17 +136,15 @@ function activity(
   typeKey: string,
   day: number,
   waypoints: XY[] = LOOP,
-  name = 'Saarbrücken Radfahren'
+  name = 'Saarbrücken Radfahren',
+  withSensors = true
 ): FakeActivity {
   const startMs = T0 + day * DAY;
   const gmt = new Date(startMs).toISOString().replace('T', ' ').slice(0, 19);
   return {
     summary: { activityId: id, activityName: name, startTimeGMT: gmt, activityType: { typeKey } },
     zip: () =>
-      zipFit(
-        buildFit(ride(waypoints, { noiseM: 3, seed: id, startMs }), { withSensors: true }),
-        id
-      ),
+      zipFit(buildFit(ride(waypoints, { noiseM: 3, seed: id, startMs }), { withSensors }), id),
   };
 }
 
@@ -163,7 +175,7 @@ describe('Garmin sync', () => {
     for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true });
   });
 
-  async function setup(activities: FakeActivity[]) {
+  async function setup(activities: FakeActivity[], bikeSensors?: BikeSensorConfig) {
     const ctx = await testContext();
     const fitDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fit-'));
     dirs.push(fitDir);
@@ -174,6 +186,7 @@ describe('Garmin sync', () => {
       importer: ctx.importer,
       routes: ctx.routes,
       fitDir,
+      bikeSensors,
     });
     return { ctx, api, sync, fitDir };
   }
@@ -208,6 +221,26 @@ describe('Garmin sync', () => {
     expect(second).toMatchObject({ imported: 0, skipped: 0, linked: 0 });
     expect(api.downloads).toEqual([]);
     expect(lastSyncRuns(ctx.db)[0]).toMatchObject({ status: 'success', imported: 0 });
+  });
+
+  it('takes the bike type from the activity type, then sensor rules, then the default', async () => {
+    const { ctx, sync } = await setup(
+      [
+        activity(1, 'cycling', 0), // power meter of the gravel bike
+        activity(2, 'road_biking', 1), // gravel bike on the road: the activity type wins
+        activity(3, 'cycling', 2, LOOP, 'No sensors', false),
+        activity(4, 'mountain_biking', 3, LOOP, 'No sensors', false),
+      ],
+      GRAVEL_QUARQ
+    );
+    await sync.run();
+    const types = listRides(ctx.db).map((r) => [r.garmin_activity_id, r.bike_type]);
+    expect(types).toEqual([
+      [4, 'mtb'],
+      [3, 'road'],
+      [2, 'road'],
+      [1, 'gravel'],
+    ]);
   });
 
   it('links rides imported earlier from GPX instead of duplicating them', async () => {

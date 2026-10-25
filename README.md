@@ -36,6 +36,9 @@ cloud account or subscription, and a Raspberry Pi is enough to run it.
   _Sync now_ button), including the full history on first start. It keeps the original FIT files
   and records which sensors were on the bike (power meter, speed sensor, …).
 - **Hammerhead Karoo**: connect with OAuth in one click. Rides are polled hourly, plus _Sync now_.
+- **Bike type from your sensors**: synced rides without a specific activity type (Garmin
+  "cycling", Hammerhead "Ride") are tagged road, gravel or MTB by the power meter or speed sensor
+  that was paired (optional, see [Bike sensors](#bike-sensors)).
 - **GPX / FIT upload** for everything else.
 - **One ride, many sources**: when the same recording arrives from Garmin, Hammerhead and an
   upload, it is recognised (same activity id, start within ±60 s, or ≥ 50 % time overlap) and
@@ -174,6 +177,18 @@ one. The most important:
 | `DATA_DIR` / `DB_PATH`                                           | `./data` / `./data/cycling_archive.db` | Where the database, backups and original files live |
 | `TZ_NAME`                                                        | system zone                  | Time zone for dates of uploaded GPX files                    |
 
+### Bike sensors
+
+Synced rides (Garmin, Hammerhead) can get their bike type from the sensors in the FIT file. Copy
+[`bike-sensors.example.json`](bike-sensors.example.json) to `data/bike-sensors.json` and list
+each bike's sensors: `deviceType` and `manufacturer` as the FIT SDK names them (`bikePower`,
+`bikeSpeed`; `garmin`, `saxonar`, `stagesCycling`, …) and their ANT+ ids (shown in Garmin Connect
+under the sensor, or in the `ride_devices` table). Garmin rides keep their activity type (road,
+gravel, MTB) and use the sensors only when it is plain "cycling"; Hammerhead rides use a matching
+sensor first, then the activity type. Anything left gets `default`. Restart the server, then run `npm run bikes:classify` to see what changes
+for rides that are already imported, and `npm run bikes:classify -- --apply` to write it. Bike
+types you picked yourself are never changed.
+
 ## How it works
 
 ```mermaid
@@ -222,10 +237,11 @@ flowchart LR
 | `npm run hammerhead:routes`                              | List your Hammerhead planned routes (read-only)                      |
 | `npm run routes:rebuild`                                 | Re-cluster all rides (keeps manual moves and your route names)       |
 | `npm run routes:evaluate [-- --save]`                    | Print route groups without writing; diff against a saved snapshot    |
+| `npm run bikes:classify [-- --apply]`                    | Re-derive bike types of synced rides from `data/bike-sensors.json`   |
 | `npm run check`                                          | Lint + typecheck + all tests (CI runs the same)                      |
 
 Stop the server before running commands that write (`garmin:sync`, `hammerhead:sync`,
-`routes:rebuild`).
+`routes:rebuild`, `bikes:classify -- --apply`).
 
 <details>
 <summary><b>Project structure</b></summary>

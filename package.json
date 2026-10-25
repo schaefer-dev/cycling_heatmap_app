@@ -46,6 +46,7 @@
     "demo:seed": "npm run demo:seed -w server --",
     "routes:rebuild": "npm run routes:rebuild -w server --",
     "routes:evaluate": "npm run routes:evaluate -w server --",
+    "bikes:classify": "npm run bikes:classify -w server --",
     "garmin:sync": "npm run garmin:sync -w server --",
     "hammerhead:sync": "npm run hammerhead:sync -w server --",
     "hammerhead:routes": "npm run hammerhead:routes -w server --"

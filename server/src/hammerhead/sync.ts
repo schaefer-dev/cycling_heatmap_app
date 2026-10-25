@@ -10,6 +10,8 @@
  * overlap) decides: an existing ride is *linked* (Hammerhead id added, gaps filled; title, track
  * and bike type kept), otherwise the ride is imported. Every activity seen gets a row in
  * hammerhead_activities, so nothing is downloaded twice and one broken file never blocks a sync.
+ * The bike type comes from the paired sensors when a rule matches (bikeSensors.ts), otherwise from
+ * the activity type.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -21,6 +23,7 @@ import { logger } from '../logger.ts';
 import type { RouteService } from '../matching/routeService.ts';
 import { parseFit } from '../parsers/fit.ts';
 import type { ParsedActivity } from '../parsers/parsedActivity.ts';
+import { NO_BIKE_SENSORS, resolveBikeType, type BikeSensorConfig } from '../rides/bikeSensors.ts';
 import type { Duplicate, RideImporter } from '../rides/importService.ts';
 import {
   MAX_ATTEMPTS,
@@ -56,6 +59,8 @@ export interface HammerheadSyncDeps {
   routes: RouteService;
   /** Raw FIT files are kept in <fitDir>/hammerhead/<activityId>.fit for reprocessing later. */
   fitDir: string;
+  /** Sensor → bike rules; none by default. */
+  bikeSensors?: BikeSensorConfig;
 }
 
 export class HammerheadSync {
@@ -227,42 +232,35 @@ export class HammerheadSync {
       const parsed = await this.#download(a.id, dryRun);
       const startMs = parsed.points.find((p) => p.time !== null)?.time ?? undefined;
       if (parsed.points.length < 2) return skip('no GPS data', { typeKey, startMs });
+      const bikeType =
+        resolveBikeType(
+          'hammerhead',
+          parsed.devices,
+          decision.bikeType,
+          this.#deps.bikeSensors ?? NO_BIKE_SENSORS
+        )?.bikeType ?? null;
 
       const duplicate = this.#deps.importer.findDuplicate(parsed, { hammerhead: a.id });
       if (duplicate) {
-        this.#link(
-          a,
-          duplicate,
-          parsed,
-          { typeKey, bikeType: decision.bikeType, startMs },
-          summary,
-          dryRun
-        );
+        this.#link(a, duplicate, parsed, { typeKey, bikeType, startMs }, summary, dryRun);
         return;
       }
 
       if (dryRun) {
         summary.imported++;
-        plan('import', decision.bikeType ?? 'unassigned bike type');
+        plan('import', bikeType ?? 'unassigned bike type');
         return;
       }
       const result = this.#deps.importer.import(parsed, {
         source: 'hammerhead',
-        bikeType: decision.bikeType,
+        bikeType,
         hammerheadActivityId: a.id,
         title: a.name,
         activityType: typeKey,
       });
       if (result.status === 'duplicate') {
         const dup = { ride: result.existing, reason: result.reason };
-        this.#link(
-          a,
-          dup,
-          parsed,
-          { typeKey, bikeType: decision.bikeType, startMs },
-          summary,
-          false
-        );
+        this.#link(a, dup, parsed, { typeKey, bikeType, startMs }, summary, false);
       } else {
         summary.imported++;
         this.#record(a, { status: 'imported', rideId: result.ride.id, typeKey, startMs });

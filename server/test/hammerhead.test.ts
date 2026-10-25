@@ -19,6 +19,7 @@ import {
 import { HammerheadSync } from '../src/hammerhead/sync.ts';
 import { parseFit } from '../src/parsers/fit.ts';
 import { parseGpx } from '../src/parsers/gpx.ts';
+import type { BikeSensorConfig } from '../src/rides/bikeSensors.ts';
 import { DUPLICATE_MIN_OVERLAP } from '../src/rides/importService.ts';
 import { listDevices, listRides } from '../src/rides/repo.ts';
 import { lastSyncRuns } from '../src/sync/runs.ts';
@@ -263,7 +264,14 @@ interface FakeActivity {
 function hhActivity(
   id: string,
   startMs: number,
-  opts: { type?: string; waypoints?: XY[]; name?: string; seed?: number; gps?: boolean } = {}
+  opts: {
+    type?: string;
+    waypoints?: XY[];
+    name?: string;
+    seed?: number;
+    gps?: boolean;
+    sensors?: boolean;
+  } = {}
 ): FakeActivity {
   const points = ride(opts.waypoints ?? LOOP, { noiseM: 3, seed: opts.seed ?? 1, startMs });
   return {
@@ -275,7 +283,7 @@ function hhActivity(
       createdAt: new Date(startMs + 3 * HOUR).toISOString(),
       activityType: opts.type ?? 'RIDE',
     },
-    fit: () => buildFit(opts.gps === false ? [] : points, { withSensors: true }),
+    fit: () => buildFit(opts.gps === false ? [] : points, { withSensors: opts.sensors ?? true }),
   };
 }
 
@@ -355,14 +363,18 @@ describe('Hammerhead sync', () => {
     for (const d of dirs.splice(0)) fs.rmSync(d, { recursive: true, force: true });
   });
 
-  async function setup(activities: FakeActivity[] = [], connected = true) {
+  async function setup(
+    activities: FakeActivity[] = [],
+    connected = true,
+    bikeSensors?: BikeSensorConfig
+  ) {
     const ctx = await testContext();
     const fitDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fit-'));
     dirs.push(fitDir);
     const tokens = dbTokenStore(ctx.db);
     if (connected) tokens.save(TOKENS);
     const api = new FakeHammerhead(activities);
-    const deps = { db: ctx.db, importer: ctx.importer, routes: ctx.routes, fitDir };
+    const deps = { db: ctx.db, importer: ctx.importer, routes: ctx.routes, fitDir, bikeSensors };
     const sync = new HammerheadSync({ ...deps, api, tokens });
     const garmin = new FakeGarmin();
     const garminSync = new GarminSync({ ...deps, api: garmin });
@@ -411,6 +423,35 @@ describe('Hammerhead sync', () => {
       status: 'success',
     });
     expect(lastSyncRuns(ctx.db, 'garmin')).toHaveLength(0);
+  });
+
+  it('classifies generic Karoo rides by their sensors, else by the default', async () => {
+    const { ctx, sync } = await setup(
+      [
+        hhActivity('1000.activity.a', T0, { type: 'RIDE' }),
+        hhActivity('1000.activity.b', T0 + DAY, { type: 'RIDE', seed: 2, sensors: false }),
+        hhActivity('1000.activity.c', T0 + 2 * DAY, { type: 'MOUNTAIN_BIKE', seed: 3 }),
+      ],
+      true,
+      {
+        defaultBikeType: 'road',
+        rules: [
+          {
+            bikeType: 'gravel',
+            name: 'Gravel / power',
+            deviceType: 'bikePower',
+            manufacturer: 'quarq',
+            antIds: [4242],
+          },
+        ],
+      }
+    );
+    await sync.run();
+    expect(listRides(ctx.db).map((r) => [r.hammerhead_activity_id, r.bike_type])).toEqual([
+      ['1000.activity.c', 'gravel'],
+      ['1000.activity.b', 'road'],
+      ['1000.activity.a', 'gravel'],
+    ]);
   });
 
   it('links a ride that already came from Garmin (track and title kept, bike type gap filled)', async () => {

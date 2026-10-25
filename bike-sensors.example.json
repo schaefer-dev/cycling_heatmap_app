@@ -1,0 +1,47 @@
+{
+  "default": "road",
+  "bikes": [
+    {
+      "name": "Road bike",
+      "bikeType": "road",
+      "sensors": [
+        {
+          "name": "Power meter",
+          "deviceType": "bikePower",
+          "manufacturer": "faveroElectronics",
+          "antIds": [12345]
+        }
+      ]
+    },
+    {
+      "name": "Gravel bike",
+      "bikeType": "gravel",
+      "sensors": [
+        {
+          "name": "Speed sensor",
+          "deviceType": "bikeSpeed",
+          "manufacturer": "garmin",
+          "antIds": [23456]
+        },
+        {
+          "name": "Power meter",
+          "deviceType": "bikePower",
+          "manufacturer": "saxonar",
+          "antIds": [34567]
+        }
+      ]
+    },
+    {
+      "name": "Mountain bike",
+      "bikeType": "mtb",
+      "sensors": [
+        {
+          "name": "Speed sensor",
+          "deviceType": "bikeSpeed",
+          "manufacturer": "garmin",
+          "antIds": [45678]
+        }
+      ]
+    }
+  ]
+}
