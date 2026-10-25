@@ -49,6 +49,9 @@ cloud account or subscription, and a Raspberry Pi is enough to run it.
 - Rides that share **≥ 90 % of their path** are grouped into a route automatically, in either
   direction. Each route shows how often and when you rode it, plus your speed and time per ride.
 - Rename, merge and move rides between routes. Manual changes are never overwritten.
+- **Favorites**: rate a route by starting its name with `1S`…`6S` (optionally `G` gravel or `R`
+  road, e.g. _"5SG Forest loop"_). Rated routes show a star badge and are collected, best first,
+  in the Favorites tab.
 - Automatic names from your ride titles or from OpenStreetMap place names
   (_"Girona loop via Banyoles · 53 km"_).
 - **Planned-route suggestions**: names of your rated Hammerhead planned routes are suggested for

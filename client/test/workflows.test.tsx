@@ -7,6 +7,7 @@ import type { ViewSettings } from '../src/App';
 import type { Ride, RouteDetail, RouteSummary, Stats, SyncStatus } from '../src/api';
 import { MapStyleControl } from '../src/components/map/MapControls';
 import Sidebar from '../src/components/Sidebar';
+import FavoritesTab from '../src/components/sidebar/FavoritesTab';
 import RidesTab from '../src/components/sidebar/RidesTab';
 import RoutesTab from '../src/components/sidebar/RoutesTab';
 import { ToastProvider } from '../src/components/Toast';
@@ -209,6 +210,57 @@ describe('RidesTab', () => {
   });
 });
 
+describe('FavoritesTab', () => {
+  beforeEach(() => {
+    vi.mocked(api.getRoutes).mockResolvedValue([
+      summary({ id: 'r1', name: '5SG Waldrunde', ride_count: 4 }),
+      summary({ id: 'r2', name: 'Seerunde', ride_count: 3 }),
+      summary({ id: 'r3', name: '6S Gipfel', ride_count: 1, reference_ride_id: 'ride-9' }),
+    ]);
+  });
+
+  function setup(selection = { routeId: null as string | null, rideId: null as string | null }) {
+    const onSelectRoute = vi.fn();
+    const onSelectRide = vi.fn();
+    render(
+      <FavoritesTab
+        bikeFilter={null}
+        selection={selection}
+        onSelectRoute={onSelectRoute}
+        onSelectRide={onSelectRide}
+      />,
+      { wrapper }
+    );
+    return { onSelectRoute, onSelectRide };
+  }
+
+  it('lists only rated routes, grouped by stars', async () => {
+    setup();
+    const six = await screen.findByRole('region', { name: '6 stars' });
+    const five = screen.getByRole('region', { name: '5 stars' });
+    expect(within(six).getByText('Gipfel')).toBeInTheDocument();
+    expect(within(six).getByText(/ridden once/)).toBeInTheDocument();
+    expect(within(five).getByText('Waldrunde')).toBeInTheDocument();
+    expect(screen.queryByText('Seerunde')).not.toBeInTheDocument();
+  });
+
+  it('opens a repeated route, but selects the ride of a route ridden once', async () => {
+    const { onSelectRoute, onSelectRide } = setup();
+    await userEvent.click(await screen.findByRole('button', { name: /Waldrunde/ }));
+    expect(onSelectRoute).toHaveBeenCalledWith('r1');
+    await userEvent.click(screen.getByRole('button', { name: /Gipfel/ }));
+    expect(onSelectRide).toHaveBeenCalledWith('ride-9');
+    expect(onSelectRoute).toHaveBeenCalledTimes(1);
+  });
+
+  it('filters by surface and explains how to add favorites', async () => {
+    setup();
+    await screen.findByRole('region', { name: '6 stars' });
+    await userEvent.click(screen.getByRole('button', { name: 'Road' }));
+    expect(screen.getByText('No favorites match the search or filter.')).toBeInTheDocument();
+  });
+});
+
 describe('MapStyleControl', () => {
   const view: ViewSettings = {
     baseMap: 'dark',
@@ -299,6 +351,12 @@ describe('Sidebar', () => {
     );
     return onBikeFilterChange;
   }
+
+  it('shows a Favorites tab with the number of rated routes', async () => {
+    vi.mocked(api.getStats).mockResolvedValue(stats(0));
+    setup();
+    expect(await screen.findByRole('tab', { name: 'Favorites 1' })).toBeInTheDocument();
+  });
 
   it('filters by bike type with counted chips', async () => {
     vi.mocked(api.getStats).mockResolvedValue(stats(1));

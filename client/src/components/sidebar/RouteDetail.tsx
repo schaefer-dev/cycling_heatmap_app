@@ -50,6 +50,7 @@ export default function RouteDetail({
   summary,
   allRoutes,
   selectedRideId,
+  backLabel = 'Routes',
   onBack,
   onSelectRoute,
   onSelectRide,
@@ -59,6 +60,8 @@ export default function RouteDetail({
   summary: RouteSummary | undefined;
   allRoutes: RouteSummary[];
   selectedRideId: string | null;
+  /** Name of the list the back button returns to. */
+  backLabel?: string;
   onBack(): void;
   onSelectRoute(routeId: string | null): void;
   onSelectRide(rideId: string): void;
@@ -160,7 +163,7 @@ export default function RouteDetail({
           icon={<ChevronLeft aria-hidden className="size-4" />}
           className="-ml-2.5"
         >
-          Routes
+          {backLabel}
         </Button>
 
         {editing ? (

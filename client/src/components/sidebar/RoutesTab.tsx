@@ -118,7 +118,7 @@ export default function RoutesTab({ bikeFilter, selection, onSelectRoute, onSele
   );
 }
 
-function BikeDots({ bikeTypes }: { bikeTypes: string | null }) {
+export function BikeDots({ bikeTypes }: { bikeTypes: string | null }) {
   const types = (bikeTypes ?? '').split(',').filter((t): t is BikeType => t in BIKE);
   return (
     <span className="flex shrink-0 gap-1" title={types.map((t) => BIKE[t].label).join(', ')}>
@@ -129,7 +129,7 @@ function BikeDots({ bikeTypes }: { bikeTypes: string | null }) {
   );
 }
 
-function RouteRow({
+export function RouteRow({
   route,
   maxCount,
   onSelect,

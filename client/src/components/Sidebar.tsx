@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { Upload } from 'lucide-react';
 import type { Selection, SidebarTab } from '../App';
-import { getStats, getSuggestions, type BikeFilter, type Stats } from '../api';
+import { getRoutes, getStats, getSuggestions, type BikeFilter, type Stats } from '../api';
 import { BIKE, BIKE_TYPES } from '../domain';
 import { qk } from '../queryKeys';
+import { countFavorites } from './sidebar/favorites';
+import FavoritesTab from './sidebar/FavoritesTab';
 import RidesTab from './sidebar/RidesTab';
 import RoutesTab from './sidebar/RoutesTab';
 import SuggestionsTab from './sidebar/SuggestionsTab';
@@ -29,6 +31,7 @@ interface Props {
 
 const TAB_LABEL: Record<SidebarTab, string> = {
   routes: 'Routes',
+  favorites: 'Favorites',
   rides: 'Rides',
   suggestions: 'Suggestions',
 };
@@ -40,8 +43,14 @@ export default function Sidebar(props: Props) {
     queryKey: qk.suggestions(false),
     queryFn: () => getSuggestions(false),
   });
+  // Shared with the Routes and Favorites tabs (same query key).
+  const { data: routes } = useQuery({
+    queryKey: qk.routes(props.bikeFilter),
+    queryFn: () => getRoutes(props.bikeFilter),
+  });
   const badge: Record<SidebarTab, number | undefined> = {
     routes: stats?.routes.total,
+    favorites: routes ? countFavorites(routes) : undefined,
     rides: stats?.rides.total,
     suggestions: suggestions?.counts.strong,
   };
@@ -72,8 +81,11 @@ export default function Sidebar(props: Props) {
         />
       </header>
 
-      <div className="flex gap-1 border-b border-line px-2" role="tablist">
-        {(['routes', 'rides', 'suggestions'] as const).map((t) => {
+      <div
+        className="flex overflow-x-auto border-b border-line px-1.5 [scrollbar-width:none]"
+        role="tablist"
+      >
+        {(['routes', 'favorites', 'rides', 'suggestions'] as const).map((t) => {
           const selected = props.tab === t;
           const highlight = t === 'suggestions' && (badge[t] ?? 0) > 0;
           return (
@@ -85,16 +97,17 @@ export default function Sidebar(props: Props) {
               aria-controls="sidebar-panel"
               onClick={() => props.onTabChange(t)}
               className={cx(
-                '-mb-px flex items-center gap-1.5 border-b-2 px-2.5 py-2.5 text-sm font-medium transition-colors',
+                '-mb-px flex shrink-0 grow items-center justify-center gap-1 border-b-2 px-1.5 py-2.5 text-sm font-medium whitespace-nowrap transition-colors',
                 selected ? 'border-signal text-fg' : 'border-transparent text-muted hover:text-fg'
               )}
             >
               {TAB_LABEL[t]}
+              {badge[t] !== undefined && ' '}
               {badge[t] !== undefined && (
                 <span
                   className={cx(
-                    'tnum rounded-sm px-1 text-2xs',
-                    highlight ? 'bg-signal/15 font-semibold text-signal' : 'text-faint'
+                    'tnum rounded-sm text-2xs',
+                    highlight ? 'bg-signal/15 px-1 font-semibold text-signal' : 'text-faint'
                   )}
                 >
                   {badge[t]}
@@ -113,6 +126,13 @@ export default function Sidebar(props: Props) {
       >
         {props.tab === 'routes' ? (
           <RoutesTab
+            bikeFilter={props.bikeFilter}
+            selection={props.selection}
+            onSelectRoute={props.onSelectRoute}
+            onSelectRide={props.onSelectRide}
+          />
+        ) : props.tab === 'favorites' ? (
+          <FavoritesTab
             bikeFilter={props.bikeFilter}
             selection={props.selection}
             onSelectRoute={props.onSelectRoute}

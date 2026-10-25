@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FilePreview, RouteSummary } from '../src/api';
 import { summarizePreview } from '../src/components/importSummary';
+import { countFavorites, favoriteGroups } from '../src/components/sidebar/favorites';
 import { sortRoutes } from '../src/components/sidebar/routeSort';
 import { HEAT_RAMP, heatColor, parseRouteRating } from '../src/domain';
 import {
@@ -160,5 +161,32 @@ describe('summarizePreview', () => {
       duplicates: 1,
       nonCyclingTypes: ['running'],
     });
+  });
+});
+
+describe('favoriteGroups', () => {
+  const routes = [
+    route({ id: 'a', name: 'Girona loop via Banyoles', last_ridden: '2026-01-01' }),
+    route({ id: 'b', name: '5SG Forest', last_ridden: '2025-01-01' }),
+    route({ id: 'c', name: '6S Coast', last_ridden: '2024-01-01' }),
+    route({ id: 'd', name: '5SR Hills', last_ridden: '2026-02-01' }),
+    route({ id: 'e', name: '?S Unrated yet', last_ridden: '2026-03-01' }),
+  ];
+  const shape = (groups: ReturnType<typeof favoriteGroups>) =>
+    groups.map((g) => [g.stars, g.favorites.map((f) => f.route.id)]);
+
+  it('keeps rated routes only, best first, most recent first within a rating', () => {
+    expect(shape(favoriteGroups(routes))).toEqual([
+      [6, ['c']],
+      [5, ['d', 'b']],
+    ]);
+    expect(countFavorites(routes)).toBe(3);
+    expect(countFavorites(undefined)).toBe(0);
+  });
+
+  it('filters by surface and search', () => {
+    expect(shape(favoriteGroups(routes, 'gravel'))).toEqual([[5, ['b']]]);
+    expect(shape(favoriteGroups(routes, 'road'))).toEqual([[5, ['d']]]);
+    expect(shape(favoriteGroups(routes, 'all', 'coast'))).toEqual([[6, ['c']]]);
   });
 });

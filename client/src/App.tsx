@@ -42,7 +42,7 @@ export interface Selection {
   rideId: string | null;
 }
 
-export type SidebarTab = 'routes' | 'rides' | 'suggestions';
+export type SidebarTab = 'routes' | 'favorites' | 'rides' | 'suggestions';
 
 export default function App() {
   const [view, setView] = usePersistentState<ViewSettings>('view-settings', DEFAULT_VIEW);
