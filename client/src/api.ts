@@ -191,6 +191,10 @@ export const getRidesNearPoint = async (lat: number, lng: number, bikeType: Bike
   (await http.get<Ride[]>('/rides/near-point', { params: { lat, lng, ...bikeParams(bikeType) } }))
     .data;
 
+/** The ride's simplified display line (light; for hover previews). */
+export const getRideLine = async (id: string) =>
+  (await http.get<{ track: LatLngTuple[] }>(`/rides/${id}/line`)).data.track;
+
 export const getDeviation = async (rideId: string) =>
   (await http.get<Deviation>(`/rides/${rideId}/deviation`)).data;
 

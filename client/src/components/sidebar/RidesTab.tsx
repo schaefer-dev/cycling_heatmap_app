@@ -12,6 +12,7 @@ import {
 } from '../../api';
 import type { BikeType } from '../../domain';
 import { formatDate, formatDuration, formatElevation, formatKm, formatTime } from '../../format';
+import { usePreviewHandlers } from '../../preview';
 import { invalidateRideData, qk } from '../../queryKeys';
 import { useToast } from '../Toast';
 import { BikeSelect, RideCount, RouteName } from '../ui/badges';
@@ -165,6 +166,7 @@ function RideCard({
   const confirm = useConfirm();
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(ride.title ?? '');
+  const preview = usePreviewHandlers({ kind: 'ride', id: ride.id });
 
   const update = useMutation({
     mutationFn: (patch: { title?: string; bike_type?: BikeType | null }) =>
@@ -201,6 +203,7 @@ function RideCard({
   return (
     // The whole card selects the ride on click; the title button makes it keyboard reachable.
     <div
+      {...preview}
       onClick={editing ? undefined : onSelect}
       className={cx(
         'group relative cursor-pointer rounded-md py-2.5 pr-1.5 pl-3 transition-colors',

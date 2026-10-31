@@ -1,10 +1,11 @@
 import L from 'leaflet';
 import { useMemo, type ReactNode } from 'react';
-import { Pane, Polyline } from 'react-leaflet';
+import { CircleMarker, Marker, Pane, Polyline } from 'react-leaflet';
 import type { Deviation, LatLngTuple, MapTrack, Section } from '../../api';
 import { bikeColor, RATING_BY_VALUE, UNASSIGNED_COLOR } from '../../domain';
 import type { MapTone } from './basemaps';
-import { LINE_COLORS, ROUTE_COLORS } from './colors';
+import { LINE_COLORS, POINT_COLORS, ROUTE_COLORS } from './colors';
+import { directionArrows } from './mapUtils';
 import { PANES } from './panes';
 
 /** Declares the custom panes; layers using them must be rendered inside. */
@@ -107,6 +108,70 @@ export function SelectedRideLayer({ track }: { track: LatLngTuple[] }) {
           lineJoin: 'round',
         }}
         interactive={false}
+      />
+    </>
+  );
+}
+
+const PREVIEW_ARROWS = 4;
+
+/** Navy disc with a cyan chevron pointing north; rotated to the direction of travel. */
+function arrowIcon(bearingDeg: number) {
+  return L.divIcon({
+    className: '',
+    iconSize: [18, 18],
+    iconAnchor: [9, 9],
+    html: `<svg width="18" height="18" viewBox="0 0 18 18" style="transform: rotate(${Math.round(bearingDeg)}deg)"><circle cx="9" cy="9" r="8" fill="${LINE_COLORS.rideCasing}"/><path d="M5 11.5 9 6l4 5.5" fill="none" stroke="${LINE_COLORS.preview}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  });
+}
+
+/**
+ * The line of the hovered sidebar row: bold cyan on a navy casing, start (green) and end (red)
+ * dots, and arrows for the direction of travel (loops start and end in the same place).
+ */
+export function PreviewLayer({ track }: { track: LatLngTuple[] }) {
+  const arrows = useMemo(
+    () =>
+      directionArrows(track, PREVIEW_ARROWS).map((a) => ({
+        position: a.position,
+        icon: arrowIcon(a.bearingDeg),
+      })),
+    [track]
+  );
+  if (track.length === 0) return null;
+  const pane = PANES.preview.name;
+  const line = { lineCap: 'round', lineJoin: 'round' } as const;
+  const dot = { color: POINT_COLORS.casing, weight: 2, fillOpacity: 1 };
+  return (
+    <>
+      <Polyline
+        positions={track}
+        pane={pane}
+        pathOptions={{ ...line, color: LINE_COLORS.rideCasing, weight: 10, opacity: 0.9 }}
+        interactive={false}
+      />
+      <Polyline
+        positions={track}
+        pane={pane}
+        pathOptions={{ ...line, color: LINE_COLORS.preview, weight: 5, opacity: 1 }}
+        interactive={false}
+      />
+      {arrows.map((a, i) => (
+        <Marker key={i} position={a.position} icon={a.icon} pane={pane} interactive={false} />
+      ))}
+      <CircleMarker
+        center={track[track.length - 1]!}
+        radius={6}
+        pane={pane}
+        interactive={false}
+        pathOptions={{ ...dot, fillColor: POINT_COLORS.end }}
+      />
+      <CircleMarker
+        center={track[0]!}
+        radius={6}
+        pane={pane}
+        interactive={false}
+        pathOptions={{ ...dot, fillColor: POINT_COLORS.start }}
       />
     </>
   );

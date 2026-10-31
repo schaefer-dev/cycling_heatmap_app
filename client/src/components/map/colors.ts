@@ -10,6 +10,8 @@ export const ROUTE_COLORS: Record<MapTone, { rides: string; reference: string }>
 export const LINE_COLORS = {
   ride: '#f8fafc',
   rideCasing: '#0e1428',
+  /** Hovered sidebar row: cyan, set apart from the white selected ride. */
+  preview: '#22d3ee',
   detour: '#fb923c',
   skipped: '#f87171',
 };

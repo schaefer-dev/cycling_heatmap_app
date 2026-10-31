@@ -5,6 +5,7 @@ import type { BikeFilter } from './api';
 export const qk = {
   rides: (bike: BikeFilter) => ['rides', bike] as const,
   ride: (id: string | null) => ['ride', id] as const,
+  rideLine: (id: string | null) => ['rideLine', id] as const,
   deviation: (id: string | null) => ['deviation', id] as const,
   routes: (bike: BikeFilter) => ['routes', bike] as const,
   route: (id: string | null) => ['route', id] as const,
@@ -23,6 +24,7 @@ export function invalidateRideData(queryClient: QueryClient): Promise<void> {
   const prefixes = [
     'rides',
     'ride',
+    'rideLine',
     'deviation',
     'routes',
     'route',

@@ -30,6 +30,7 @@ import {
   formatSpeed,
   formatTime,
 } from '../../format';
+import { usePreviewHandlers } from '../../preview';
 import { invalidateRouteData, qk } from '../../queryKeys';
 import { useToast } from '../Toast';
 import { RouteName } from '../ui/badges';
@@ -323,9 +324,11 @@ function RouteRideRow({
   const offRoute =
     ride.route_similarity != null && ride.route_similarity < OFF_ROUTE && !isReference;
   const seconds = ride.moving_time_s ?? ride.duration_s;
+  const preview = usePreviewHandlers({ kind: 'ride', id: ride.id });
 
   return (
     <li
+      {...preview}
       ref={rowRef}
       className={cx(
         'group relative flex items-start rounded-md transition-colors',

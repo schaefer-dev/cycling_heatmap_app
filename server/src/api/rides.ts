@@ -204,6 +204,14 @@ export function ridesRouter(ctx: AppContext): Router {
     res.json({ success: true });
   });
 
+  /** Simplified display line only: cheap enough for hover previews. */
+  router.get('/:id/line', (req, res) => {
+    const { id } = parse(idParam, req.params);
+    const line = rides.loadDisplayLine(db, id);
+    if (!line) throw new NotFoundError('Ride not found');
+    res.json({ track: line.map((p) => [p.lat, p.lng]) });
+  });
+
   router.get('/:id/deviation', (req, res) => {
     const { id } = parse(idParam, req.params);
     const d = ctx.routes.deviation(id);

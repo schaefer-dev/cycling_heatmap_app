@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, renderHook, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -15,6 +15,7 @@ import RoutesTab from '../src/components/sidebar/RoutesTab';
 import SuggestionsTab from '../src/components/sidebar/SuggestionsTab';
 import SyncStatusPanel from '../src/components/sidebar/SyncStatusPanel';
 import { ToastProvider } from '../src/components/Toast';
+import { PreviewProvider, usePreviewState } from '../src/preview';
 
 vi.mock('../src/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../src/api')>()),
@@ -142,6 +143,26 @@ describe('RoutesTab', () => {
     expect(onSelect).toHaveBeenCalledWith('r1');
   });
 
+  it('previews a route on the map while its card is hovered', async () => {
+    const controls = { show: vi.fn(), hide: vi.fn() };
+    render(
+      <PreviewProvider value={controls}>
+        <RoutesTab
+          bikeFilter={null}
+          selection={{ routeId: null, rideId: null }}
+          onSelectRoute={vi.fn()}
+          onSelectRide={vi.fn()}
+        />
+      </PreviewProvider>,
+      { wrapper }
+    );
+    const card = await screen.findByRole('button', { name: /Waldrunde/ });
+    await userEvent.hover(card);
+    expect(controls.show).toHaveBeenLastCalledWith({ kind: 'route', id: 'r1' });
+    await userEvent.unhover(card);
+    expect(controls.hide).toHaveBeenCalled();
+  });
+
   it('shows every ride of the selected route with direction and match', async () => {
     setup(vi.fn(), 'r1');
     expect(await screen.findByText('Sun, 1 Jun 2025')).toBeInTheDocument();
@@ -158,6 +179,33 @@ describe('RoutesTab', () => {
     await userEvent.clear(input);
     await userEvent.type(input, 'Hausrunde{Enter}');
     expect(api.renameRoute).toHaveBeenCalledWith('r1', 'Hausrunde');
+  });
+});
+
+describe('usePreviewState', () => {
+  it('waits briefly before showing, swaps rows without a gap and clears at once', () => {
+    vi.useFakeTimers();
+    try {
+      const { result } = renderHook(() => usePreviewState());
+      act(() => result.current.controls.show({ kind: 'route', id: 'a' }));
+      expect(result.current.preview).toBeNull();
+      act(() => void vi.advanceTimersByTime(200));
+      expect(result.current.preview).toEqual({ kind: 'route', id: 'a' });
+
+      // Leaving one row and entering the next keeps the old line until the new one is due.
+      act(() => {
+        result.current.controls.hide();
+        result.current.controls.show({ kind: 'ride', id: 'b' });
+      });
+      expect(result.current.preview).toEqual({ kind: 'route', id: 'a' });
+      act(() => void vi.advanceTimersByTime(200));
+      expect(result.current.preview).toEqual({ kind: 'ride', id: 'b' });
+
+      act(() => result.current.clear());
+      expect(result.current.preview).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

@@ -6,6 +6,7 @@ import Sidebar from './components/Sidebar';
 import { ConfirmProvider } from './components/ui/Confirm';
 import { ToastProvider } from './components/Toast';
 import MapView from './components/map/MapView';
+import { PreviewProvider, usePreviewState } from './preview';
 import { usePersistentState } from './usePersistentState';
 
 const queryClient = new QueryClient({
@@ -50,6 +51,8 @@ export default function App() {
   const [selection, setSelection] = useState<Selection>({ routeId: null, rideId: null });
   const [tab, setTab] = usePersistentState<SidebarTab>('sidebar-tab', 'routes');
   const [showImport, setShowImport] = useState(false);
+  // Selecting or switching tabs hides the hovered row without a mouseleave, so clear explicitly.
+  const { preview, controls: previewControls, clear: clearPreview } = usePreviewState();
 
   const updateView = useCallback(
     (patch: Partial<ViewSettings>) => setView((v) => ({ ...v, ...patch })),
@@ -57,21 +60,38 @@ export default function App() {
   );
 
   /** Selecting a ride from the map or the ride list also shows its route context. */
-  const selectRide = useCallback((rideId: string | null, routeId: string | null = null) => {
-    setSelection((s) => ({ rideId, routeId: rideId === null ? s.routeId : routeId }));
-  }, []);
+  const selectRide = useCallback(
+    (rideId: string | null, routeId: string | null = null) => {
+      clearPreview();
+      setSelection((s) => ({ rideId, routeId: rideId === null ? s.routeId : routeId }));
+    },
+    [clearPreview]
+  );
 
-  const selectRoute = useCallback((routeId: string | null) => {
-    setSelection({ routeId, rideId: null });
-  }, []);
+  const selectRoute = useCallback(
+    (routeId: string | null) => {
+      clearPreview();
+      setSelection({ routeId, rideId: null });
+    },
+    [clearPreview]
+  );
+
+  const changeTab = useCallback(
+    (t: SidebarTab) => {
+      clearPreview();
+      setTab(t);
+    },
+    [clearPreview, setTab]
+  );
 
   /** Opens a route in the Routes tab, optionally keeping one of its rides selected. */
   const showRoute = useCallback(
     (routeId: string, rideId: string | null = null) => {
+      clearPreview();
       setTab('routes');
       setSelection({ routeId, rideId });
     },
-    [setTab]
+    [clearPreview, setTab]
   );
 
   return (
@@ -79,20 +99,23 @@ export default function App() {
       <ToastProvider>
         <ConfirmProvider>
           <div className="flex h-screen min-w-[900px] bg-canvas">
-            <Sidebar
-              tab={tab}
-              onTabChange={setTab}
-              selection={selection}
-              onSelectRide={selectRide}
-              onSelectRoute={selectRoute}
-              onShowRoute={showRoute}
-              bikeFilter={bikeFilter}
-              onBikeFilterChange={setBikeFilter}
-              onImportClick={() => setShowImport(true)}
-            />
+            <PreviewProvider value={previewControls}>
+              <Sidebar
+                tab={tab}
+                onTabChange={changeTab}
+                selection={selection}
+                onSelectRide={selectRide}
+                onSelectRoute={selectRoute}
+                onShowRoute={showRoute}
+                bikeFilter={bikeFilter}
+                onBikeFilterChange={setBikeFilter}
+                onImportClick={() => setShowImport(true)}
+              />
+            </PreviewProvider>
             <main className="relative min-w-0 flex-1">
               <MapView
                 selection={selection}
+                preview={preview}
                 bikeFilter={bikeFilter}
                 view={view}
                 onViewChange={updateView}

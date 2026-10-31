@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import type { Selection } from '../../App';
 import { getRoutes, type BikeFilter } from '../../api';
 import { formatDate, formatElevation, formatKm } from '../../format';
+import { usePreviewHandlers } from '../../preview';
 import { qk } from '../../queryKeys';
 import { RouteName } from '../ui/badges';
 import { cx } from '../ui/cx';
@@ -153,8 +154,12 @@ function SingleRideRow({
   onSelect(): void;
 }) {
   const { route } = favorite;
+  const preview = usePreviewHandlers(
+    route.reference_ride_id ? { kind: 'ride', id: route.reference_ride_id } : null
+  );
   return (
     <button
+      {...preview}
       onClick={onSelect}
       aria-pressed={selected}
       className={cx(

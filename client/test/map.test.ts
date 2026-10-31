@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { BASE_MAPS, sampleTileUrl } from '../src/components/map/basemaps';
 import { downsample, elevationProfile, pointAtDistance } from '../src/components/map/elevation';
 import { heatOptions, heatRamp } from '../src/components/map/heat';
+import { directionArrows } from '../src/components/map/mapUtils';
 
 describe('heatOptions', () => {
   it('keeps rarely ridden roads visible: the opacity floor grows with intensity', () => {
@@ -62,5 +63,40 @@ describe('sampleTileUrl', () => {
       'https://a.tile.openstreetmap.org/13/4160/3041.png'
     );
     expect(sampleTileUrl(BASE_MAPS.dark, [41.98, 2.82], 13)).toMatch(/\/tile\/13\/3041\/4160$/);
+  });
+});
+
+describe('directionArrows', () => {
+  it('spaces arrows evenly along the line, pointing the way it was ridden', () => {
+    // North for 1 km, then east for 1 km (at ~42°N, 0.009° lat ≈ 1 km, 0.0121° lng ≈ 1 km).
+    const track: Array<[number, number]> = [
+      [42, 3],
+      [42.009, 3],
+      [42.009, 3.0121],
+    ];
+    const arrows = directionArrows(track, 3);
+    expect(arrows).toHaveLength(3);
+    expect(arrows[0]!.bearingDeg).toBeCloseTo(0, 0);
+    expect(arrows[0]!.position[0]).toBeCloseTo(42.0045, 3);
+    expect(arrows[1]!.position[0]).toBeCloseTo(42.009, 3);
+    expect(arrows[2]!.bearingDeg).toBeCloseTo(90, 0);
+    expect(arrows[2]!.position[1]).toBeCloseTo(3.006, 3);
+
+    const back = directionArrows([...track].reverse(), 1);
+    expect(back[0]!.bearingDeg).toBeGreaterThan(179);
+  });
+
+  it('returns nothing for degenerate lines', () => {
+    expect(directionArrows([], 3)).toEqual([]);
+    expect(directionArrows([[42, 3]], 3)).toEqual([]);
+    expect(
+      directionArrows(
+        [
+          [42, 3],
+          [42, 3],
+        ],
+        3
+      )
+    ).toEqual([]);
   });
 });

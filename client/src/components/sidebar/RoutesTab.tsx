@@ -5,6 +5,7 @@ import type { Selection } from '../../App';
 import { getRoutes, type BikeFilter, type RouteSummary } from '../../api';
 import { BIKE, type BikeType } from '../../domain';
 import { formatElevation, formatKm, formatRelative } from '../../format';
+import { usePreviewHandlers } from '../../preview';
 import { qk } from '../../queryKeys';
 import { BikeDot, RideCount, RouteName } from '../ui/badges';
 import { Select, SearchInput, Switch } from '../ui/fields';
@@ -138,8 +139,10 @@ export function RouteRow({
   maxCount: number;
   onSelect(): void;
 }) {
+  const preview = usePreviewHandlers({ kind: 'route', id: route.id });
   return (
     <button
+      {...preview}
       onClick={onSelect}
       className="w-full rounded-md px-3 py-2.5 text-left transition-colors hover:bg-raised"
     >

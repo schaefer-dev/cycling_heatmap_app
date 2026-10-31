@@ -11,6 +11,7 @@ import {
   getHeatmapData,
   getMapBounds,
   getRide,
+  getRideLine,
   getRidesNearPoint,
   getRoute,
   getRouteTracks,
@@ -21,6 +22,7 @@ import {
   type Ride,
 } from '../../api';
 import { BIKE_TYPES, type BikeType } from '../../domain';
+import type { PreviewTarget } from '../../preview';
 import { qk } from '../../queryKeys';
 import SectionDetailsPanel from '../SectionDetailsPanel';
 import SectionRatingPanel from '../SectionRatingPanel';
@@ -33,6 +35,7 @@ import {
   AllTracksLayer,
   DeviationLayer,
   MapPanes,
+  PreviewLayer,
   RouteLayer,
   SectionsLayer,
   SelectedRideLayer,
@@ -46,6 +49,8 @@ import TrackInfoPopup from './TrackInfoPopup';
 
 interface Props {
   selection: Selection;
+  /** Sidebar row under the cursor; its line is drawn without moving the map. */
+  preview: PreviewTarget | null;
   bikeFilter: BikeFilter;
   view: ViewSettings;
   onViewChange(patch: Partial<ViewSettings>): void;
@@ -71,6 +76,7 @@ const POINT_STYLE = { color: POINT_COLORS.casing, weight: 2, fillOpacity: 1 };
 
 export default function MapView({
   selection,
+  preview,
   bikeFilter,
   view,
   onViewChange,
@@ -143,6 +149,28 @@ export default function MapView({
     queryFn: () => getDeviation(selection.rideId!),
     enabled: showDeviation,
   });
+
+  // Nothing to preview when the hovered row is already what the map shows.
+  const previewRouteId =
+    preview?.kind === 'route' && preview.id !== selection.routeId ? preview.id : null;
+  const previewRideId =
+    preview?.kind === 'ride' && preview.id !== selection.rideId ? preview.id : null;
+  // Same key as a selected route, so clicking a hovered route opens instantly.
+  const { data: previewRoute } = useQuery({
+    queryKey: qk.route(previewRouteId),
+    queryFn: () => getRoute(previewRouteId!),
+    enabled: !!previewRouteId,
+  });
+  const { data: previewRideLine } = useQuery({
+    queryKey: qk.rideLine(previewRideId),
+    queryFn: () => getRideLine(previewRideId!),
+    enabled: !!previewRideId,
+  });
+  const previewTrack = previewRouteId
+    ? (previewRoute?.reference_track ?? null)
+    : previewRideId
+      ? (previewRideLine ?? null)
+      : null;
 
   const rideTrack = ride && ride.id === selection.rideId ? ride.track : null;
   const referenceTrack = route?.reference_track ?? null;
@@ -280,6 +308,7 @@ export default function MapView({
               onSelect={(s) => setSelectedSectionId(s.id)}
             />
           )}
+          {previewTrack && <PreviewLayer track={previewTrack} />}
           {sectionTrack && <SelectedRideLayer track={sectionTrack} />}
           {start && (
             <CircleMarker

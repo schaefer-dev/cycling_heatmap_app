@@ -27,6 +27,45 @@ export function closestPointIndex(
   return best;
 }
 
+export interface DirectionArrow {
+  position: LatLngTuple;
+  /** Compass bearing of travel in degrees (0 = north, 90 = east). */
+  bearingDeg: number;
+}
+
+/** `count` arrows at evenly spaced distances along the line (never at its very ends). */
+export function directionArrows(track: readonly LatLngTuple[], count: number): DirectionArrow[] {
+  if (track.length < 2 || count < 1) return [];
+  const cumulative = [0];
+  for (let i = 1; i < track.length; i++) {
+    cumulative.push(cumulative[i - 1]! + approxDistanceM(track[i - 1]!, track[i]!));
+  }
+  const total = cumulative[cumulative.length - 1]!;
+  if (total === 0) return [];
+
+  const arrows: DirectionArrow[] = [];
+  let seg = 1;
+  for (let k = 1; k <= count; k++) {
+    const target = (total * k) / (count + 1);
+    while (seg < track.length - 1 && cumulative[seg]! < target) seg++;
+    const a = track[seg - 1]!;
+    const b = track[seg]!;
+    const len = cumulative[seg]! - cumulative[seg - 1]!;
+    const t = len > 0 ? (target - cumulative[seg - 1]!) / len : 0;
+    arrows.push({
+      position: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t],
+      bearingDeg: bearing(a, b),
+    });
+  }
+  return arrows;
+}
+
+function bearing(a: LatLngTuple, b: LatLngTuple): number {
+  const dy = b[0] - a[0];
+  const dx = (b[1] - a[1]) * Math.cos(((a[0] + b[0]) / 2) * (Math.PI / 180));
+  return ((Math.atan2(dx, dy) * 180) / Math.PI + 360) % 360;
+}
+
 /** Bounding box of a line without spreading huge arrays into Math.min/max. */
 export function lineBounds(track: readonly LatLngTuple[]): [LatLngTuple, LatLngTuple] | null {
   if (track.length === 0) return null;

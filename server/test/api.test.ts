@@ -148,6 +148,11 @@ describe('rides API', () => {
     expect(detail.body.track[0]).toHaveLength(2);
     expect(detail.body.track.length).toBe(detail.body.elevation.length);
 
+    const line = (await request(app).get(`/api/rides/${id}/line`)).body.track;
+    expect(line[0]).toHaveLength(2);
+    expect(line.length).toBeGreaterThan(1);
+    expect(line.length).toBeLessThanOrEqual(detail.body.track.length);
+
     const updated = await request(app)
       .patch(`/api/rides/${id}`)
       .send({ title: 'Renamed', bike_type: 'road' });
@@ -163,6 +168,7 @@ describe('rides API', () => {
 
     expect((await request(app).delete(`/api/rides/${id}`)).status).toBe(200);
     expect((await request(app).get(`/api/rides/${id}`)).status).toBe(404);
+    expect((await request(app).get(`/api/rides/${id}/line`)).status).toBe(404);
     expect((await request(app).get('/api/routes')).body).toHaveLength(0);
   });
 
