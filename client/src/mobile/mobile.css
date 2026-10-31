@@ -1,0 +1,42 @@
+/* Phone shell only: this file ships in the lazily loaded mobile chunk. */
+
+.mobile-shell {
+  --deck-card: min(78vw, 300px);
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-shell .deck-card {
+  width: var(--deck-card);
+}
+
+/* Side padding lets the first and last card snap to the centre too. */
+.mobile-shell .deck-scroller {
+  padding-inline: calc((100vw - var(--deck-card)) / 2);
+  scrollbar-width: none;
+}
+
+.mobile-shell .deck-scroller::-webkit-scrollbar {
+  display: none;
+}
+
+/* Attribution sits top right, below the status bar, clear of the sheet. */
+.mobile-shell .leaflet-top {
+  top: env(safe-area-inset-top);
+}
+
+.mobile-shell .leaflet-control-attribution {
+  max-width: 55vw;
+  font-size: 9px;
+  line-height: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-radius: 0 0 0 var(--radius-sm);
+}
+
+/* iOS zooms into inputs under 16px; keep form text at 16px on the phone. */
+.mobile-shell input,
+.mobile-shell select {
+  font-size: 16px;
+}

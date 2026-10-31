@@ -14,21 +14,7 @@ import { Button, IconButton } from '../ui/Button';
 import { Figure } from '../ui/Metrics';
 import { elevationProfile } from './elevation';
 import ElevationProfile from './ElevationProfile';
-
-/** Readable names of the devices that recorded a ride (head unit, sensors), de-duplicated. */
-function deviceNames(devices: RideDetail['devices']): string[] {
-  const names = devices
-    .map((d) => {
-      const product = d.product_name ?? d.product;
-      const maker = d.manufacturer;
-      if (product && maker && !String(product).toLowerCase().includes(String(maker).toLowerCase()))
-        return `${maker} ${product}`;
-      return product ?? maker ?? null;
-    })
-    .filter((n): n is string | number => n !== null && n !== '')
-    .map(String);
-  return [...new Set(names)];
-}
+import { deviceNames } from './devices';
 
 /** The selected ride on the map: key figures, elevation profile, devices and actions. */
 export default function RideDetailPanel({

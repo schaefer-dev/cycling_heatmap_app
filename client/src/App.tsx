@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useCallback, useState } from 'react';
+import { lazy, Suspense, useCallback, useState } from 'react';
 import type { BikeFilter } from './api';
 import ImportModal from './components/ImportModal';
 import Sidebar from './components/Sidebar';
@@ -7,7 +7,11 @@ import { ConfirmProvider } from './components/ui/Confirm';
 import { ToastProvider } from './components/Toast';
 import MapView from './components/map/MapView';
 import { PreviewProvider, usePreviewState } from './preview';
+import { useUiMode } from './uiMode';
 import { usePersistentState } from './usePersistentState';
+
+/** The phone shell (view-only) is its own chunk; desktop never loads it. */
+const MobileApp = lazy(() => import('./mobile/MobileApp.tsx'));
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { staleTime: 30_000, refetchOnWindowFocus: false } },
@@ -46,6 +50,25 @@ export interface Selection {
 export type SidebarTab = 'routes' | 'favorites' | 'rides' | 'suggestions';
 
 export default function App() {
+  const mode = useUiMode();
+  return (
+    <QueryClientProvider client={queryClient}>
+      <ToastProvider>
+        <ConfirmProvider>
+          {mode === 'mobile' ? (
+            <Suspense fallback={<div className="h-dvh bg-canvas" />}>
+              <MobileApp />
+            </Suspense>
+          ) : (
+            <DesktopApp />
+          )}
+        </ConfirmProvider>
+      </ToastProvider>
+    </QueryClientProvider>
+  );
+}
+
+function DesktopApp() {
   const [view, setView] = usePersistentState<ViewSettings>('view-settings', DEFAULT_VIEW);
   const [bikeFilter, setBikeFilter] = useState<BikeFilter>(null);
   const [selection, setSelection] = useState<Selection>({ routeId: null, rideId: null });
@@ -95,39 +118,33 @@ export default function App() {
   );
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <ToastProvider>
-        <ConfirmProvider>
-          <div className="flex h-screen min-w-[900px] bg-canvas">
-            <PreviewProvider value={previewControls}>
-              <Sidebar
-                tab={tab}
-                onTabChange={changeTab}
-                selection={selection}
-                onSelectRide={selectRide}
-                onSelectRoute={selectRoute}
-                onShowRoute={showRoute}
-                bikeFilter={bikeFilter}
-                onBikeFilterChange={setBikeFilter}
-                onImportClick={() => setShowImport(true)}
-              />
-            </PreviewProvider>
-            <main className="relative min-w-0 flex-1">
-              <MapView
-                selection={selection}
-                preview={preview}
-                bikeFilter={bikeFilter}
-                view={view}
-                onViewChange={updateView}
-                onSelectRide={selectRide}
-                onShowRoute={showRoute}
-                onClearSelection={() => setSelection({ routeId: null, rideId: null })}
-              />
-            </main>
-            {showImport && <ImportModal onClose={() => setShowImport(false)} />}
-          </div>
-        </ConfirmProvider>
-      </ToastProvider>
-    </QueryClientProvider>
+    <div className="flex h-screen min-w-[900px] bg-canvas">
+      <PreviewProvider value={previewControls}>
+        <Sidebar
+          tab={tab}
+          onTabChange={changeTab}
+          selection={selection}
+          onSelectRide={selectRide}
+          onSelectRoute={selectRoute}
+          onShowRoute={showRoute}
+          bikeFilter={bikeFilter}
+          onBikeFilterChange={setBikeFilter}
+          onImportClick={() => setShowImport(true)}
+        />
+      </PreviewProvider>
+      <main className="relative min-w-0 flex-1">
+        <MapView
+          selection={selection}
+          preview={preview}
+          bikeFilter={bikeFilter}
+          view={view}
+          onViewChange={updateView}
+          onSelectRide={selectRide}
+          onShowRoute={showRoute}
+          onClearSelection={() => setSelection({ routeId: null, rideId: null })}
+        />
+      </main>
+      {showImport && <ImportModal onClose={() => setShowImport(false)} />}
+    </div>
   );
 }

@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import type L from 'leaflet';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { MousePointerClick, X } from 'lucide-react';
-import { CircleMarker, MapContainer, Popup, TileLayer, useMap, useMapEvents } from 'react-leaflet';
+import { CircleMarker, MapContainer, Popup, TileLayer, useMapEvents } from 'react-leaflet';
 import type { Selection, ViewSettings } from '../../App';
 import {
   errorMessage,
@@ -28,6 +28,7 @@ import SectionDetailsPanel from '../SectionDetailsPanel';
 import SectionRatingPanel from '../SectionRatingPanel';
 import { useToast } from '../Toast';
 import { Button } from '../ui/Button';
+import { AutoFit } from './AutoFit';
 import { BASE_MAPS } from './basemaps';
 import { POINT_COLORS } from './colors';
 import HeatmapLayer from './HeatmapLayer';
@@ -428,29 +429,6 @@ export default function MapView({
       )}
     </>
   );
-}
-
-/** Fits the map once per `fitKey` when its bounds are known. Returning to the overview doesn't refit. */
-function AutoFit({
-  fitKey,
-  bounds,
-}: {
-  fitKey: string;
-  bounds: [LatLngTuple, LatLngTuple] | null;
-}) {
-  const map = useMap();
-  const lastKey = useRef<string | null>(null);
-  const lastOverviewKey = useRef<string | null>(null);
-  useEffect(() => {
-    if (!bounds || lastKey.current === fitKey) return;
-    lastKey.current = fitKey;
-    if (fitKey.startsWith('all:')) {
-      if (lastOverviewKey.current === fitKey) return;
-      lastOverviewKey.current = fitKey;
-    }
-    map.fitBounds(bounds, { padding: [40, 40] });
-  }, [map, fitKey, bounds]);
-  return null;
 }
 
 function ClickHandler({ onClick }: { onClick(latlng: L.LatLng): void }) {
